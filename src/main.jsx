@@ -1,7 +1,7 @@
 import React,{useState,useEffect,useRef,useMemo} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Radar,ArrowUpRight,ArrowRight,RotateCw,SlidersHorizontal,Users,Gamepad2,Sparkles,X,Check,ExternalLink,ChevronDown,LogOut,LoaderCircle,Info,Play,EyeOff,Clock3,Undo2} from 'lucide-react';
-import {DEFAULT_WEIGHTS,LABELS,scoreEvents,scoreGame,wheelSegments,pickSegment} from '../server/ranking.mjs';
+import {DEFAULT_WEIGHTS,LABELS,scoreGame,wheelSegments,pickSegment} from '../server/ranking.mjs';
 import {makePreference,isSuppressed} from '../server/preferences.mjs';
 import './style.css';
 

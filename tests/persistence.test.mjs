@@ -40,7 +40,13 @@ test('preferences are authenticated and isolated between users',async t=>{
  assert.equal((await request('/api/preferences',{appid:123,name:'Test',action:'snooze',days:3})).status,200);
  assert.equal((await(await request('/api/preferences')).json()).preferences.length,1);
  assert.equal((await(await request('/api/preferences',undefined,token2)).json()).preferences.length,0);
- await request('/api/preferences',{appid:123,action:'restore'});assert.equal((await(await request('/api/preferences')).json()).preferences.length,0);
+ await request('/api/preferences',{appid:123,name:'Test',action:'snooze',days:1,scope:'coop'});
+ assert.equal((await(await request('/api/preferences')).json()).preferences.length,2);
+ assert.equal((await request('/api/preferences',{appid:123,name:'Test',action:'snooze',days:1,scope:'invalid'})).status,400);
+ await request('/api/preferences',{appid:123,action:'restore'});
+ const remaining=(await(await request('/api/preferences')).json()).preferences;
+ assert.equal(remaining.length,1);assert.equal(remaining[0].scope,'coop');
+ await request('/api/preferences',{appid:123,action:'restore',scope:'coop'});assert.equal((await(await request('/api/preferences')).json()).preferences.length,0);
 });
 test('durable scan checkpoints recover after publish failure without duplicating games',async t=>{
  const db=await temporaryStore(t),messages=[];let fail=false,ownedCalls=0,newsCalls=0;
