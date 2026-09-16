@@ -1,6 +1,6 @@
 # Replay Radar: AWS-Hosting
 
-Stand: 16. September 2026. Infrastruktur und Deployment sind im Repository definiert. Der tatsächliche Live-Status wird separat nach dem Apply geprüft. Region für Backend und Daten: Frankfurt (`eu-central-1`). CloudFront ist global, der zugehörige WAF liegt technisch in `us-east-1`.
+Stand: 16. September 2026. Infrastruktur und Deployment sind im Repository definiert. Am 16. September 2026 erfolgreich bereitgestellt: [replay-radar.com](https://replay-radar.com), ACM gültig, CloudFront-Free-Abonnement **ACTIVE**, einschließlich WAF und vorhandener Route-53-Zone. Region für Backend und Daten: Frankfurt (`eu-central-1`). CloudFront ist global, der zugehörige WAF liegt technisch in `us-east-1`.
 
 ## Empfehlung
 
@@ -40,12 +40,12 @@ Beispiel für Lambda vor Freikontingent: 10.000 Schritte × 3 Sekunden × 0,25 G
 
 Der CloudFront-Free-Plan deckelt **nicht** die Rechnung von Lambda, DynamoDB oder anderen Origins. Terraform setzt begrenzte Lambda-Parallelität; die App verhindert beliebige Neuscans bei jedem Aufruf. Ein optionaler monatlicher 5-USD-Budgetalarm ist vorbereitet, stoppt aber keine Ressourcen. Er ist ausdrücklich kontoweit und kann deshalb auch durch andere Projekte auslösen; ohne `budget_email` wird er nicht angelegt.
 
-### Was beim Free-Plan zu prüfen bleibt
+### Free-Plan: verifizierter Status und Grenzen
 
-- Der CloudFormation-Ressourcentyp `AWS::PricingPlanManager::Subscription` wurde im aktiven Konto lesend bestätigt. Die tatsächliche Abofreigabe und die Kombination der Dienste kann erst beim Deployment abschließend geprüft werden.
+- Der CloudFormation-Ressourcentyp `AWS::PricingPlanManager::Subscription` wurde im aktiven Konto lesend bestätigt. Das Deployment hat die Kombination erfolgreich aktiviert; Terraform-Ausgabe `free_plan_status` ist `ACTIVE`.
 - Die aktuelle AWS-CLI in WSL kennt den neuen PricingPlanManager-Befehl noch nicht. Terraform verwaltet deshalb das **native CloudFormation-Abo**; es gibt keinen fragilen Shell-Workaround und keinen automatischen Wechsel in einen bezahlten Plan.
 - Vor der Abofreigabe fallen CloudFront/WAF zunächst unter Pay-as-you-go. Wenn das Abo fehlschlägt, legt Terraform bereits erfolgreich erstellte Ressourcen **nicht automatisch wieder still**. Das Deployment gilt dann als gescheitert; die projektspezifischen Ressourcen müssen wieder entfernt werden. Die WAF ohne Abo hätte feste Grundkosten (bei drei Regeln grob 8 USD/Monat plus Requests).
-- Neuere AWS-Konten im eingeschränkten Free-Account-Plan sind laut AWS nicht berechtigt. Die API für den Account-Plan meldet beim vorhandenen Konto „Missing data“; daraus lässt sich keine endgültige Berechtigung ableiten. Es wird keine kostenpflichtige Alternative stillschweigend aktiviert.
+- Neuere AWS-Konten im eingeschränkten Free-Account-Plan sind laut AWS nicht berechtigt. Die Account-Plan-Abfrage war vorab uneindeutig; die erfolgreiche Aktivierung bestätigt nun die Berechtigung dieses Deployments. Es wird keine kostenpflichtige Alternative stillschweigend aktiviert.
 
 ## Cache, Daten und Löschung
 
@@ -148,3 +148,14 @@ Zuerst Terraform-Destroy-Plan prüfen. Der Bucket erlaubt kein `force_destroy` u
 - [DynamoDB TTL](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/TTL.html)
 - [Lambda-OAC und POST-Payload-Hash](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-lambda.html)
 - [WAF-Preise ohne Flat-Rate-Abo](https://aws.amazon.com/waf/pricing/)
+
+
+## Live-Prüfung vom 16. September 2026
+
+- TLS und DNS für `replay-radar.com` aktiv.
+- Anonymer `/api/session` liefert 200, bestätigt serverseitige Key-Konfiguration und setzt `Cache-Control: no-store`.
+- Präferenzen/Scans ohne Sitzung: 401; fremder Origin bei Schreibzugriff: 403.
+- Direkte Lambda-Function-URL ohne CloudFront-Signatur: 403.
+- CloudFormation-Free-Subscription: ACTIVE.
+- Automatische Tests: 12 Node-Tests und 11 Browser-Tests; GitHub CI ebenfalls erfolgreich.
+- Ein kompletter persönlicher Login mit anschließendem echten Radar-Scan und Freundesvergleich bleibt ein interaktiver Abnahmeschritt.

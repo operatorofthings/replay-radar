@@ -2,6 +2,8 @@
 
 Finde neue Gründe, deine Steam-Spiele wieder anzuspielen – und ein gemeinsames Koop-Spiel für den nächsten Abend.
 
+**Live: [replay-radar.com](https://replay-radar.com)**
+
 ## Features
 
 - Offizielle Entwickler-News seit deinem letzten Spielzeitpunkt, gewichtet nach Vollversion, DLC und Updates.

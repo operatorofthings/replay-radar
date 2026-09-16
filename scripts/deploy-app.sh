@@ -11,7 +11,7 @@ with zipfile.ZipFile('.build/lambda.zip','w',zipfile.ZIP_DEFLATED) as z:z.write(
 PY
 for fn in replay-radar-worker replay-radar-api; do
   aws lambda update-function-code --function-name "$fn" --zip-file fileb://.build/lambda.zip --query LastUpdateStatus --output text
-  aws lambda wait function-updated-v2 --function-name "$fn"
+  aws lambda wait function-updated --function-name "$fn"
 done
 # Upload assets first; retain previous hashes so already-open tabs keep working.
 aws s3 sync dist/assets/ "s3://$STATIC_BUCKET/assets/" --cache-control 'public,max-age=31536000,immutable' --only-show-errors
