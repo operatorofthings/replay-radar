@@ -1,0 +1,53 @@
+import {test,expect} from '@playwright/test';
+test('English is the default and language switching persists without changing filters',async({page})=>{
+ await page.goto('http://localhost:4317');
+ await expect(page.locator('html')).toHaveAttribute('lang','en');
+ await expect(page.getByRole('dialog')).toContainText('Your library. Rediscovered.');
+ await expect(page.getByRole('dialog')).toContainText('full release 100, DLC 70');
+ await page.getByLabel('Dialog language / Dialogsprache').selectOption('de');
+ await expect(page.getByRole('dialog')).toContainText('Finde deinen Wiedereinstieg');
+ await page.getByRole('button',{name:'Los geht’s'}).click();
+ await page.getByLabel('Genre',{exact:true}).selectOption('Abenteuer');
+ const count=await page.locator('.game-card').count();
+ await page.getByLabel('Language / Sprache',{exact:true}).selectOption('en');
+ await expect(page.locator('.game-card')).toHaveCount(count);
+ await expect(page.locator('select[aria-label="Genre"] option:checked')).toHaveText('Adventure');
+ await page.getByRole('button',{name:'Adjust weights'}).click();
+ await expect(page.getByRole('dialog')).toContainText('ranks reasons to return');
+ await page.getByRole('button',{name:'Apply',exact:true}).click();
+ await page.reload();await expect(page.locator('html')).toHaveAttribute('lang','en');
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:'test-results/english-mobile.png',fullPage:true});
+ await page.getByRole('button',{name:'How it works'}).click();
+ await expect(page.getByRole('dialog')).toContainText('Find your reason to return');
+ await page.screenshot({path:'test-results/english-intro.png'});
+});
+test('comparison overlay appears before HTTP response, shows progress, and clears on completion or failure',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('rr_intro_seen','1'));
+ await page.route('**/api/session',r=>r.fulfill({json:{user:{name:'Test'},keyConfigured:true,hasKey:true}}));
+ await page.route('**/api/preferences',r=>r.fulfill({json:{preferences:[]}}));
+ await page.route('**/api/scan',r=>r.fulfill({json:{status:'complete',games:[]}}));
+ await page.route('**/api/friends',r=>r.fulfill({json:{friends:[{steamid:'A',name:'Friend A'}]}}));
+ let release,posts=0,failed=false;
+ const gate=new Promise(resolve=>release=resolve);
+ await page.route('**/api/coop',async r=>{
+  if(r.request().method()==='POST'){posts++;if(failed)return r.fulfill({status:500,json:{error:'Der Scan konnte nicht gestartet werden.'}});await gate;return r.fulfill({json:{status:'running',total:135,done:35,games:[]}});}
+  return r.fulfill({json:{status:'complete',total:135,done:135,games:[{appid:1,name:'Shared Game'}]}});
+ });
+ await page.goto('http://localhost:4317');
+ await page.getByRole('button',{name:'Check shared games'}).click();
+ await expect(page.locator('#coop-panel')).toHaveAttribute('aria-busy','true');
+ await expect(page.locator('.coop-loading')).toContainText('Starting your comparison');
+ await expect(page.getByRole('button',{name:'Check shared games'})).toBeDisabled();
+ expect(await page.locator('.coop-loading').evaluate(el=>getComputedStyle(el).backdropFilter)).toContain('blur');
+ await page.screenshot({path:'test-results/coop-loading.png'});
+ release();await expect(page.locator('.coop-loading')).toContainText('35 / 135 games checked');
+ await expect(page.locator('.coop-loading')).toHaveCount(0,{timeout:10000});
+ await expect(page.getByRole('button',{name:'Pick a game',exact:true})).toBeEnabled();expect(posts).toBe(1);
+ failed=true;await page.getByRole('button',{name:'Check shared games'}).click();
+ await expect(page.getByRole('alert')).toContainText('The scan could not be started.');
+ await expect(page.locator('.coop-loading')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Check shared games'})).toBeEnabled();
+});

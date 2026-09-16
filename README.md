@@ -59,3 +59,9 @@ Playwright startet den lokalen Server bei Bedarf. Tests prüfen Ranking, gewicht
 Optional registriert die Oberfläche einen Genre-Filter für Browser mit WebMCP-Unterstützung.
 
 Quellen: [Steam OpenID](https://steamcommunity.com/dev), [IPlayerService](https://partner.steamgames.com/doc/webapi/IPlayerService), [ISteamUser](https://partner.steamgames.com/doc/webapi/ISteamUser), [ISteamNews](https://partner.steamgames.com/doc/webapi/ISteamNews).
+
+### Interface languages
+
+The interface defaults to English. The EN/DE selector in the header and dialogs switches languages and stores the choice locally in the browser. Original developer news and game names remain unchanged. German source strings are translated through `src/i18n.js` and `src/locales/en.json`; genre identifiers remain stable across language changes.
+
+The co-op comparison displays a blurred loading overlay from the initial request through background processing. Progress updates appear inside the panel, and failed requests release the controls for retrying.

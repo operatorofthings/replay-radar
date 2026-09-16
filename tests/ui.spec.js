@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-test.beforeEach(async({page})=>{await page.addInitScript(()=>{if(!sessionStorage.getItem('rr_test_boot')){localStorage.setItem('rr_intro_seen','1');sessionStorage.setItem('rr_test_boot','1');}});});
+test.beforeEach(async({page})=>{await page.addInitScript(()=>{if(!sessionStorage.getItem('rr_test_boot')){localStorage.setItem('rr_intro_seen','1');localStorage.setItem('rr_language','de');sessionStorage.setItem('rr_test_boot','1');}});});
 test('dashboard filters, ranking controls, detail dialog, friend switch and card shuffle work',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://localhost:4317');
@@ -92,7 +92,8 @@ test('expired snooze reappears on reload',async({page})=>{
 
 test('first visit introduction persists and remains available from footer',async({page})=>{
  await page.goto('http://localhost:4317');await page.evaluate(()=>localStorage.removeItem('rr_intro_seen'));await page.reload();
- await expect(page.getByRole('dialog')).toContainText('Worum geht');
+ await expect(page.getByRole('dialog')).toContainText('Deine Bibliothek. Neu entdeckt.');
+ await page.getByText('Steam, Daten & offener Code',{exact:true}).click();
  await expect(page.getByRole('link',{name:/Quellcode/})).toHaveAttribute('href','https://github.com/operatorofthings/replay-radar');
  await page.getByRole('button',{name:'Los geht’s'}).click();await page.reload();await expect(page.getByRole('dialog')).toHaveCount(0);
  await page.getByRole('button',{name:'So funktioniert’s'}).click();await expect(page.getByRole('dialog')).toBeVisible();
