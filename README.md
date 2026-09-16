@@ -9,7 +9,7 @@ Finde neue Gründe, deine Steam-Spiele wieder anzuspielen – und ein gemeinsame
 - Offizielle Entwickler-News seit deinem letzten Spielzeitpunkt, gewichtet nach Vollversion, DLC und Updates.
 - Genre-Filter und erklärbare Scores: wichtigstes Ereignis plus begrenzte Boni für weitere Inhalte, Aktualität und Abwechslung.
 - „Keine Lust“ (7 Tage), kompakte Wiedervorlage (1/3/7 Tage), Sofort-bis-morgen und Rückgängig.
-- Koop-Rad aus beiden Bibliotheken, optionale Score-Gewichtung, durchsuchbare Liste mit Gewinnchancen und getrennten Koop-Ausblendungen.
+- Koop-Shuffle mit Spielkarten aus beiden Bibliotheken, optionale Score-Gewichtung, durchsuchbare Liste mit Gewinnchancen und getrennten Koop-Ausblendungen.
 - Einführung mit Quellcode, Architektur und Datenvorhaltung beim ersten Besuch; später unter „So funktioniert’s“.
 - Steam OpenID: Das Passwort bleibt bei Steam. Anmeldung ist für alle Steam-Konten offen.
 
@@ -36,7 +36,7 @@ Der Abwechslungsbonus verwendet verfügbare Spielminuten der letzten 14 Tage und
 
 Überschriften werden heuristisch eingeordnet; Sales, Zukunftsankündigungen und Hotfixes werden soweit erkennbar ausgeschlossen. Pro Spiel maximal 500 Meldungen. Fehler und unvollständige Archive werden angezeigt. DLC-Besitz wird nicht überprüft. Ohne letzten Spielzeitpunkt wird kein Rückkehrvergleich erfunden.
 
-Koop braucht gemeinsame AppIDs und Steam-Kategorie 38 (Online-Koop), optional 9/39. Standardmäßig gleiche Chancen. Optional: `Gewicht = 1 + Replay-Score / 50`. Unbewertete Spiele behalten Gewicht 1. Auswahl, Prozentanzeige und Rad verwenden dieselben Intervalle; die Zufallsquelle ist `crypto.getRandomValues`. Bei über 20 Kandidaten zeigt das Rad nur Segmente und Tooltips; die durchsuchbare Liste enthält weiterhin sämtliche Titel. Koop-Scores übernehmen vorhandene Radar-Ergebnisse und lösen keinen zusätzlichen News-Scan aus.
+Koop braucht gemeinsame AppIDs und Steam-Kategorie 38 (Online-Koop), optional 9/39. Standardmäßig gleiche Chancen. Optional: `Gewicht = 1 + Replay-Score / 50`. Unbewertete Spiele behalten Gewicht 1. Auswahl und Prozentanzeige verwenden dieselben Wahrscheinlichkeiten; die Zufallsquelle ist `crypto.getRandomValues`. Der Gewinner wird einmal aus sämtlichen Kandidaten gezogen. Die begrenzte Kartenanimation ist rein dekorativ und verändert die Chancen nicht. Die durchsuchbare Liste enthält weiterhin sämtliche Titel. Bei reduzierter Bewegung oder nur einem Kandidaten erscheint das Ergebnis unmittelbar. Koop-Scores übernehmen vorhandene Radar-Ergebnisse und lösen keinen zusätzlichen News-Scan aus.
 
 ## Daten und Hosting
 

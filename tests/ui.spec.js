@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 test.beforeEach(async({page})=>{await page.addInitScript(()=>{if(!sessionStorage.getItem('rr_test_boot')){localStorage.setItem('rr_intro_seen','1');sessionStorage.setItem('rr_test_boot','1');}});});
-test('dashboard filters, ranking controls, detail dialog, friend switch and wheel work',async({page})=>{
+test('dashboard filters, ranking controls, detail dialog, friend switch and card shuffle work',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://localhost:4317');
  await expect(page.getByRole('heading',{name:/Gute Spiele verdienen/})).toBeVisible();
@@ -17,9 +17,9 @@ test('dashboard filters, ranking controls, detail dialog, friend switch and whee
  await expect(page.getByRole('dialog')).toContainText('Beispielmeldungen');
  await page.keyboard.press('Escape');
  await page.getByLabel('Dein Koop-Partner').selectOption('demo-3');
- await expect(page.locator('.wheel-caption')).toContainText('3 GEMEINSAME');
- await page.getByRole('button',{name:'Rad drehen',exact:true}).click();
- await expect(page.getByRole('button',{name:'Noch eine Runde'})).toBeVisible({timeout:7000});
+ await expect(page.locator('.draw-caption')).toContainText('3 GEMEINSAME');
+ await page.getByRole('button',{name:'Spiel auslosen',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Nochmal mischen'})).toBeVisible({timeout:7000});
  await expect(page.getByRole('link',{name:'In Steam starten'})).toHaveAttribute('href',/^steam:\/\/run\/(548430|892970|632360)$/);
  expect(errors).toEqual([]);
 });
@@ -56,7 +56,7 @@ test('signed-in workflow shows real scan data, partial failures and friend priva
  await expect(page.locator('.notice')).toContainText('1 News-Abfragen fehlgeschlagen');
  await page.getByRole('button',{name:'Gemeinsame Spiele prüfen'}).click();
  await expect(page.getByRole('alert')).toContainText('Spieledetails sind nicht sichtbar');
- await expect(page.getByRole('button',{name:'Rad drehen',exact:true})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Spiel auslosen',exact:true})).toBeDisabled();
 });
 test('WebMCP genre tool updates the same state and rejects unknown input',async({page})=>{
  await page.addInitScript(()=>{window.registeredTools={};Object.defineProperty(document,'modelContext',{value:{registerTool(tool,{signal}){window.registeredTools[tool.name]=tool;signal.addEventListener('abort',()=>delete window.registeredTools[tool.name]);}}});});
@@ -71,7 +71,7 @@ test('dismiss, snooze, reload persistence and restore leave the coop pool unchan
  await page.goto('http://localhost:4317');
  await page.getByRole('button',{name:'Keine Lust auf Satisfactory',exact:true}).click();
  await expect(page.locator('.game-card h3').filter({hasText:'Satisfactory'})).toHaveCount(0);
- await expect(page.locator('.wheel-caption')).toContainText('6 GEMEINSAME');
+ await expect(page.locator('.draw-caption')).toContainText('6 GEMEINSAME');
  await page.reload();
  await expect(page.getByRole('button',{name:'1 zurückgestellt'})).toBeVisible();
  await page.getByRole('button',{name:'Risk of Rain 2 später zeigen',exact:true}).click();
@@ -102,13 +102,14 @@ test('score explanation, quick action and separate coop preferences work',async(
  await page.getByLabel('Score für Satisfactory erklären').click();await expect(page.locator('.score-breakdown').first()).toContainText('Abwechslung');await page.getByLabel('Score für Satisfactory erklären').click();await page.locator('h1').click();
  await page.getByRole('button',{name:'Satisfactory sofort bis morgen ausblenden'}).click();await expect(page.locator('.game-card h3').filter({hasText:'Satisfactory'})).toHaveCount(0);
  await page.locator('.coop-library summary').click();
- await page.getByRole('button',{name:'Satisfactory im Koop für 3 Tage ausblenden',exact:true}).click();await expect(page.locator('.wheel-caption')).toContainText('5 GEMEINSAME');
- await page.reload();await expect(page.locator('.wheel-caption')).toContainText('5 GEMEINSAME');
+ await page.getByRole('button',{name:'Satisfactory im Koop für 3 Tage ausblenden',exact:true}).click();await expect(page.locator('.draw-caption')).toContainText('5 GEMEINSAME');
+ await page.reload();await expect(page.locator('.draw-caption')).toContainText('5 GEMEINSAME');
  await page.getByLabel('Replay-Score gewichten').check();await page.locator('.coop-library summary').click();
  await page.getByLabel('Koop-Spiel suchen').fill('Risk of Rain');await expect(page.locator('.coop-library-row')).toHaveCount(1);
  await expect(page.locator('.coop-library-row')).toContainText('Gewinnchance');
 });
 test('large coop libraries keep every candidate accessible',async({page})=>{
+ await page.addInitScript(()=>{crypto.getRandomValues=array=>{array.fill(4294967295);return array;};Math.random=()=>0;});
  const games=Array.from({length:250},(_,i)=>({appid:i+1,name:`Coop title ${i+1}`,genres:['Action']}));
  await page.route('**/api/session',r=>r.fulfill({json:{user:{name:'Test'},hasKey:true}}));
  await page.route('**/api/preferences',r=>r.fulfill({json:{preferences:[]}}));
@@ -116,6 +117,35 @@ test('large coop libraries keep every candidate accessible',async({page})=>{
  await page.route('**/api/friends',r=>r.fulfill({json:{friends:[{steamid:'friend',name:'Friend'}]}}));
  await page.route('**/api/coop',r=>r.fulfill({json:{status:'complete',games}}));
  await page.goto('http://localhost:4317');await page.getByRole('button',{name:'Gemeinsame Spiele prüfen'}).click();
- await expect(page.locator('.wheel-caption')).toContainText('250 GEMEINSAME');await page.locator('.coop-library summary').click();await expect(page.locator('.coop-library-row')).toHaveCount(250);
+ await expect(page.locator('.draw-caption')).toContainText('250 GEMEINSAME');await page.locator('.coop-library summary').click();await expect(page.locator('.coop-library-row')).toHaveCount(250);
  await page.getByLabel('Koop-Spiel suchen').fill('title 250');await expect(page.locator('.coop-library-row')).toHaveCount(1);
+ await page.getByRole('button',{name:'Spiel auslosen',exact:true}).click();
+ await expect(page.getByLabel('Dein Koop-Partner')).toBeDisabled();
+ await expect(page.getByLabel('Replay-Score gewichten')).toBeDisabled();
+ await expect(page.locator('.result-box h3')).toHaveText('Coop title 250',{timeout:7000});
+ await expect(page.locator('.shuffle-card-copy strong')).toHaveText('Coop title 250');
+});
+
+test('dropdown arrows and field edges hit the native select',async({page})=>{
+ await page.goto('http://localhost:4317');
+ for(const selector of ['.select-wrap','.friend-select','.sort-select']){
+   const field=page.locator(selector);await field.scrollIntoViewIfNeeded();
+   expect(await field.evaluate(el=>{const r=el.getBoundingClientRect();return [8,r.width-12].every(x=>document.elementFromPoint(r.x+x,r.y+r.height/2)?.tagName==='SELECT');})).toBe(true);
+ }
+ const field=page.locator('.select-wrap'),box=await field.boundingBox();await page.mouse.click(box.x+box.width-12,box.y+box.height/2);await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
+ await expect(page.getByLabel('Genre',{exact:true})).not.toHaveValue('Alle Genres');
+});
+test('shuffle final card matches the drawn game and honors reduced motion',async({page})=>{
+ await page.emulateMedia({reducedMotion:'reduce'});await page.goto('http://localhost:4317');
+ await page.getByRole('button',{name:'Spiel auslosen',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Nochmal mischen'})).toBeVisible({timeout:2000});
+ await expect(page.locator('.shuffle-card-copy strong')).toHaveText(await page.locator('.result-box h3').innerText());
+ expect(await page.locator('.shuffle-card').count()).toBe(1);
+});
+
+test('one remaining candidate is revealed immediately without fake suspense',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('rr_demo_preferences',JSON.stringify(Object.fromEntries([275850,1621690,548430,892970,632360].map(appid=>[`coop:${appid}`,{appid,scope:'coop',name:'Excluded',until:Date.now()+60000}])))));
+ await page.goto('http://localhost:4317');await expect(page.locator('.draw-caption')).toContainText('1 GEMEINSAME');
+ await page.getByRole('button',{name:'Spiel auslosen',exact:true}).click();
+ await expect(page.locator('.result-box h3')).toHaveText('Satisfactory',{timeout:1000});
 });
