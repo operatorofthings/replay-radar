@@ -108,3 +108,10 @@ test('mixed cache hits and misses keep complete progress and bounded nonrecursiv
  job.startedAt=Date.now()-6*60000;await db.put('user:mixed','job:coop',job);await db.put('user:mixed',`coop-result:${job.friendKey}:online`,job);
  assert.equal((await startJob(account,'coop',{friend:'A'},dependencies)).status,'running');assert.equal(messages.length,1);
 });
+
+test('existing scan snapshots get corrected on a cache hit without starting another scan',async t=>{
+ const db=await temporaryStore(t),account={alias:'old-news'},messages=[];
+ await db.put('user:old-news','job:scan',{status:'complete',startedAt:Date.now(),games:[{appid:1,events:[{title:'Store Update 11.1.0',kind:'release'},{title:'Update 11.3.0',kind:'update'}]},{appid:2,events:[{title:'Store Update 11.1.0',kind:'release'}]}]});
+ const result=await startJob(account,'scan',{}, {db,enqueue:async m=>messages.push(m)});
+ assert.equal(result.cached,true);assert.equal(result.games.length,1);assert.equal(result.games[0].events.length,1);assert.equal(result.games[0].events[0].kind,'update');assert.equal(messages.length,0);
+});

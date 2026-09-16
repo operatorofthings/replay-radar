@@ -1,7 +1,7 @@
 import React,{useState,useEffect,useRef,useMemo} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Radar,ArrowUpRight,ArrowRight,RotateCw,SlidersHorizontal,Users,Gamepad2,Sparkles,X,Check,ExternalLink,ChevronDown,LogOut,LoaderCircle,Info,Play,EyeOff,Clock3,Undo2} from 'lucide-react';
-import {DEFAULT_WEIGHTS,LABELS,scoreGame,wheelSegments,pickSegment} from '../server/ranking.mjs';
+import {DEFAULT_WEIGHTS,LABELS,refreshGameEvents,scoreGame,wheelSegments,pickSegment} from '../server/ranking.mjs';
 import {makePreference,isSuppressed} from '../server/preferences.mjs';
 import './style.css';
 
@@ -64,7 +64,7 @@ function App(){
  useEffect(()=>{if(demo||job.status!=='running')return;const id=setInterval(()=>api('/api/scan').then(setJob).catch(e=>setError(e.message)),5000);return()=>clearInterval(id);},[demo,job.status]);
  useEffect(()=>{if(demo||coop.status!=='running')return;const id=setInterval(()=>api('/api/coop').then(setCoop).catch(e=>setFriendError(e.message)),5000);return()=>clearInterval(id);},[demo,coop.status]);
  useEffect(()=>{try{localStorage.setItem('rr_weights',JSON.stringify(weights));}catch{}},[weights]);
- const games=demo?demoGames.map(g=>({...g,image:images[g.appid]})):job.games;
+ const games=demo?demoGames.map(g=>({...g,image:images[g.appid]})):refreshGameEvents(job.games);
  const genres=['Alle Genres',...new Set(games.flatMap(g=>g.genres||[]))];
  const suppressed=Object.values(preferences).filter(p=>p.scope!=='coop'&&isSuppressed(p,clock));
  const visibleGames=games.filter(g=>!isSuppressed(preferences[g.appid],clock));

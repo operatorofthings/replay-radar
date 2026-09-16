@@ -164,3 +164,18 @@ test('cached friend comparisons remain selectable and explain incomplete Steam c
  await page.getByText('1 Spiele konnten nicht auf Koop geprüft werden.').click();
  await expect(page.getByText('Unbekannter Titel: Steam liefert für diesen Titel keine Store-Daten.')).toBeVisible();
 });
+
+test('old Finals snapshot no longer gives store rotations a full release badge or score',async({page})=>{
+ await page.route('**/api/session',r=>r.fulfill({json:{user:{name:'Testspieler'},keyConfigured:true,hasKey:true}}));
+ await page.route('**/api/preferences',r=>r.fulfill({json:{preferences:[]}}));
+ await page.route('**/api/friends',r=>r.fulfill({json:{friends:[]}}));
+ await page.route('**/api/scan',r=>r.fulfill({json:{status:'complete',games:[{appid:1,name:'THE FINALS',genres:['Action'],lastPlayed:1700000000,minutes:60,events:[{id:'store',title:'Store Update 11.1.0',kind:'release',date:1750000000},{id:'update',title:'Update 11.3.0',kind:'update',date:1750100000}]},{appid:2,name:'Shop only',genres:[],events:[{id:'store2',title:'Store Update 1.0',kind:'release',date:1750000000}]}]}}));
+ await page.goto('http://localhost:4317');
+ await expect(page.locator('.game-card')).toHaveCount(1);
+ await expect(page.locator('.game-card .event-badge')).toHaveText('Content-Update');
+ expect(Number(await page.locator('.score summary strong').innerText())).toBeLessThan(20);
+ await page.getByRole('button',{name:'Updates für THE FINALS ansehen'}).click();
+ await expect(page.locator('.event-list li')).toHaveCount(1);
+ await expect(page.locator('.event-list')).toContainText('Update 11.3.0');
+ await expect(page.locator('.event-list')).not.toContainText('1.0 / Vollversion');
+});

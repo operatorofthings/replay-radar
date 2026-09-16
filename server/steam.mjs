@@ -1,4 +1,4 @@
-import {relevantEvents} from './ranking.mjs';
+import {relevantEvents,reclassifyEvents} from './ranking.mjs';
 import {storage,DAY} from './storage.mjs';
 
 let storeTail=Promise.resolve();
@@ -53,7 +53,7 @@ export async function metadata(appid) {
   });
 }
 export async function updates(game) {
-  return cached(`news-v3-${game.appid}-${game.rtime_last_played}`,DAY*1000,async()=>{
+  const news=await cached(`news-v3-${game.appid}-${game.rtime_last_played}`,DAY*1000,async()=>{
     const items=[];let enddate;let truncated=false;
     for(let page=0;page<5;page++){
       const params={appid:game.appid,count:100,maxlength:1,feeds:'steam_community_announcements'};
@@ -68,4 +68,5 @@ export async function updates(game) {
     }
     return {events:relevantEvents(items,game.rtime_last_played),truncated};
   });
+  return {...news,events:reclassifyEvents(news.events)};
 }

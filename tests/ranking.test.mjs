@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {classify,relevantEvents,scoreEvents,commonCoop,scoreGame,wheelSegments,pickSegment} from '../server/ranking.mjs';
+import {classify,reclassifyEvents,refreshGameEvents,relevantEvents,scoreEvents,commonCoop,scoreGame,wheelSegments,pickSegment} from '../server/ranking.mjs';
 test('release outranks DLC, major and ordinary updates even when many small updates arrive',()=>{
  assert.equal(classify({title:'Version 1.0 is out now!'}),'release');
  assert.equal(classify({title:'New expansion available now'}),'dlc');
@@ -41,4 +41,20 @@ test('weighted wheel intervals, selection and displayed probabilities agree incl
  const many=wheelSegments(Array.from({length:500},(_,appid)=>({appid,score:appid%110})),true);
  assert.equal(many.length,500);assert.ok(Math.abs(many.at(-1).end-1)<1e-12);
  for(const s of many)assert.equal(pickSegment(many,(s.start+s.end)/2).game.appid,s.game.appid);
+});
+
+test('release detection uses whole versions and launch evidence, excluding store rotations',()=>{
+ for(const title of ['Store Update 11.1.0','Store Update 11.2.0','Store Update 1.0','Shop Update 1.0 is out now','Item Shop rotation'])assert.equal(classify({title}),null,title);
+ for(const version of ['11.1.0','0.1.0','2.1.0','101.0','1.0.1','1.0.0.1','1.0-beta','1.0rc1'])assert.equal(classify({title:`Update ${version} is out now`}),'update',version);
+ for(const title of ['Version 1.0 is out now!','v1.0 launch','Update 1.0.0 released','Full release is live','We are out of early access!'])assert.equal(classify({title}),'release',title);
+ assert.equal(classify({title:'Update 1.0'}),'update');
+ assert.equal(classify({title:'DLC 1.0 available now'}),'dlc');
+ assert.equal(classify({title:'Version 1.0 coming soon'}),null);
+});
+test('stored misclassifications are corrected without fetching news or changing coop ownership',()=>{
+ const events=[{id:'shop',title:'Store Update 11.1.0',kind:'release',date:100},{id:'patch',title:'Update 11.1.0',kind:'release',date:200}];
+ const games=refreshGameEvents([{appid:1,events},{appid:2,events:[events[0]]},{appid:3,categories:[38]}]);
+ assert.deepEqual(games.map(g=>g.appid),[1,3]);assert.equal(games[0].events[0].kind,'update');assert.equal(games[0].events.length,1);
+ assert.equal(scoreGame(games[0]).base,15);assert.equal(events[1].kind,'release','Do not mutate persisted snapshots');
+ assert.deepEqual(reclassifyEvents(games[0].events),games[0].events);
 });

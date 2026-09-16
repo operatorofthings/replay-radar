@@ -2,12 +2,12 @@ import {randomUUID,createHash} from 'node:crypto';
 import {storage,DAY,RETENTION} from './storage.mjs';
 import {config} from './config.mjs';
 import * as steam from './steam.mjs';
-import {commonCoop} from './ranking.mjs';
+import {commonCoop,refreshGameEvents} from './ranking.mjs';
 
 let localTail=Promise.resolve();
 const coopCacheKey=(friendKey,mode)=>`coop-result:${friendKey}:${mode}`;
 const reusable=j=>j?.status==='complete'&&Date.now()-j.startedAt<(j.failed?5*60000:DAY*1000);
-const publicJob=j=>j?Object.fromEntries(Object.entries(j).filter(([k])=>!['todo','sessionId','friend','friendKey','jobId','cursor'].includes(k))):{status:'idle',games:[]};
+const publicJob=j=>j?{...Object.fromEntries(Object.entries(j).filter(([k])=>!['todo','sessionId','friend','friendKey','jobId','cursor'].includes(k))),games:refreshGameEvents(j.games)}:{status:'idle',games:[]};
 export async function readJob(alias,type){const db=await storage();const job=await db.get(`user:${alias}`,`job:${type}`);if(job?.status==='running'&&Date.now()-job.updatedAt>30*60000){job.status='error';job.error='Der Scan wurde unterbrochen. Bitte erneut starten.';}return publicJob(job);}
 async function enqueueBatch(messages){
  if(process.env.QUEUE_URL){

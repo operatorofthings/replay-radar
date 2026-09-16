@@ -1,14 +1,27 @@
 export const DEFAULT_WEIGHTS = {release:100, dlc:70, major:40, update:15};
 export const LABELS = {release:'1.0 / Vollversion',dlc:'Neuer DLC',major:'Großes Update',update:'Content-Update'};
 export function classify(item) {
-  const title = item.title.toLowerCase();
+  const title = String(item.title||'').toLowerCase();
   // Publisher headlines are evidence, not a structured release database.
   if (/\b(coming soon|coming on|arrives on|releases on|launches on|roadmap|preview|teaser|wishlist|announc\w*|upcoming|next week|tomorrow|demnächst|angekündigt|erscheint am|bald|sale|discount|% off|livestream|live stream|giveaway|soundtrack|hotfix|bugfix|patch notes)\b/.test(title)) return null;
-  if (/(\b1\.0(?:\.0)?\b(?![.\d])|full release|full launch|leav(?:es|ing|e) early access|out of early access|vollversion)/.test(title)) return 'release';
-  if (/\b(dlc|expansion|erweiterung)\b/.test(title) && /\b(out|available|released|launch|live|now|da|verfügbar|erschienen)\b/.test(title)) return 'dlc';
+  // A shop rotation is not new gameplay. Match entire version tokens, never
+  // a suffix such as 11.1.0 or 0.1.0. Bare version numbers are not launch proof.
+  if (/\b(store|shop|item shop)\s+(update|rotation|refresh)\b|\b(shop|store)-update\b/.test(title)) return null;
+  const addon=/\b(dlc|expansion|erweiterung)\b/.test(title);
+  if (addon && /\b(out|available|released|launch|live|now|da|verfügbar|erschienen)\b/.test(title)) return 'dlc';
+  const versionOne=/(?<![\w.])v?1\.0(?:\.0)?(?![\w.]|[- ]?(?:beta|alpha|rc)\b)/.test(title);
+  const launch=/\b(release|released|launch|launched|out now|is out|available now|now available|is live|veröffentlicht|erschienen|jetzt verfügbar)\b/.test(title);
+  if (!addon && (/\b(full release|full launch|leav(?:es|ing|e) early access|out of early access|vollversion)\b/.test(title) || versionOne&&launch)) return 'release';
   if (/\b(major|massive|biggest|content|großes) update|new (biome|chapter|campaign)|neues kapitel/.test(title)) return 'major';
   if (/\b(update|new content|new map|new season|neue inhalte)\b/.test(title)) return 'update';
   return null;
+}
+// Re-evaluate stored headlines as well as new ones; no Steam refetch needed.
+export function reclassifyEvents(events=[]) {
+  return events.flatMap(event=>{const kind=classify(event);return kind?[{...event,kind}]:[];});
+}
+export function refreshGameEvents(games=[]) {
+  return games.flatMap(game=>{if(!Array.isArray(game.events))return [game];const events=reclassifyEvents(game.events);return events.length?[{...game,events}]:[];});
 }
 export function relevantEvents(items,lastPlayed,now=Date.now()/1000) {
   if (!lastPlayed) return [];
