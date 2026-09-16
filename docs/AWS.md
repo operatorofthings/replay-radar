@@ -16,7 +16,7 @@ flowchart TD
   Queue --> Worker[Lambda Scan-Worker]
   Worker --> Steam[Steam API und Store]
   Worker --> State
-  Worker -->|nächster gespeicherter Schritt| Queue
+  Worker -->|nur Initialisierung: begrenzte Arbeitspakete| Queue
   Config[SSM SecureString] --> API
   Config --> Worker
 ```
@@ -31,7 +31,7 @@ Die Function URL akzeptiert nur von CloudFront signierte Zugriffe. Dadurch läss
 | S3 | Kleine statische Website; OAC, kein öffentlicher Bucket | Geringe Request-Kosten; bis 5 GB S3-Standard-Speichergutschrift im CloudFront-Plan |
 | Lambda | ARM64, 256 MB; API maximal 5, Worker 1 gleichzeitige Ausführung | Meist innerhalb des geteilten Freikontingents |
 | DynamoDB | On-demand; komprimierte Datensätze, keine Indizes, kein PITR | Typischerweise Centbeträge; On-demand-Requests sind nicht das Provisioned-Free-Tier |
-| SQS | Ein FIFO-Worker, ein Spiel pro dauerhaft gespeichertem Schritt | Bei kleinem Volumen gewöhnlich innerhalb des SQS-Freikontingents |
+| SQS | Ein FIFO-Worker, bis zu drei Spiele pro dauerhaft gespeichertem Schritt | Bei kleinem Volumen gewöhnlich innerhalb des SQS-Freikontingents |
 | SSM + Logs | Standard-Parameter, Standard-Durchsatz; Logs 7 Tage | Klein; abhängig von Decrypts, Logvolumen und verbleibenden Freikontingenten |
 
 **Planungswert: etwa 0–2 USD/Monat**, ohne Domain und Steuern. Annahme: 5–10 bekannte Nutzer, wenige hundert gespielte Titel pro Nutzer, etwa ein Scan pro Woche, insgesamt ungefähr 10.000 Worker-Schritte im Monat, keine Dauer-Polling-Browser. Das ist eine Abschätzung und kein Kostendeckel.
@@ -163,3 +163,10 @@ Zuerst Terraform-Destroy-Plan prüfen. Der Bucket erlaubt kein `force_destroy` u
 - [GitHub-Deployment mit OIDC erfolgreich](https://github.com/operatorofthings/replay-radar/actions/runs/35069327916).
 - Produktions-Browsertest: Einführung, Score-Erklärung, Sofort-Ausblenden/Rückgängig, gewichtetes Rad und Steam-Redirect mit Secure-/HttpOnly-Cookie erfolgreich, keine Browserfehler.
 - Live-DynamoDB-Test mit kurzlebiger synthetischer Testsitzung: getrennte Radar-/Koop-Präferenzen, Wiederherstellung und Logout erfolgreich; Testdaten anschließend entfernt.
+
+
+## Scan-Korrektur: keine rekursive SQS-Kette
+
+Der erste persönliche Scan stoppte bei 15/305: AWS meldete `RecursiveInvocationsDropped`, weil jeder Worker-Schritt seinen Nachfolger in dieselbe Queue schrieb. Statt diesen Schutz abzuschalten, plant jetzt nur die Initialisierung alle verbleibenden Pakete vorab ein. Jedes Paket prüft maximal drei Spiele parallel und veröffentlicht keine Nachfolger. Store-Aufrufe bleiben global seriell gedrosselt. Lambda-Rekursionsschutz bleibt unverändert aktiv.
+
+Die FIFO-Reihenfolge und gespeicherten Cursor verhindern Doppelzählungen. Wiederholte Initialisierung plant nur noch ausstehende Pakete; fehlgeschlagene Batch-Zustellung wird wiederholt. News-Anfragen fordern nur einen minimalen Inhaltsauszug an, da ausschließlich Überschrift, Datum und Quellen-URL gebraucht werden. Die UI schätzt nach mehreren Paketen die Restzeit und kennzeichnet längere Fortschrittspausen. Das ist keine garantierte Dauer; Steam-Latenz und Drosselung bleiben bestimmend.

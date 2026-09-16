@@ -50,7 +50,7 @@ export async function updates(game) {
   return cached(`news-v3-${game.appid}-${game.rtime_last_played}`,DAY*1000,async()=>{
     const items=[];let enddate;let truncated=false;
     for(let page=0;page<5;page++){
-      const params={appid:game.appid,count:100,maxlength:0,feeds:'steam_community_announcements'};
+      const params={appid:game.appid,count:100,maxlength:1,feeds:'steam_community_announcements'};
       if(enddate)params.enddate=enddate;
       const response=await steam('ISteamNews/GetNewsForApp/v2',params);
       const batch=response.appnews?.newsitems;if(!Array.isArray(batch))throw new Error('Steam hat keine gültigen News geliefert.');

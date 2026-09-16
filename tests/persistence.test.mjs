@@ -58,3 +58,23 @@ test('durable scan checkpoints recover after publish failure without duplicating
  await step(messages[0],dependencies);await step(messages[0],dependencies);
  const job=await db.get('user:a','job:scan');assert.equal(job.status,'complete');assert.equal(job.games.length,1);assert.equal(newsCalls,1);assert.ok(job.refreshAfter>Date.now());
 });
+
+
+test('finite fanout completes a large scan with bounded concurrency and no recursive chunk publishing',async t=>{
+ const db=await temporaryStore(t),messages=[],games=Array.from({length:60},(_,i)=>({appid:i+1,name:`Game ${i+1}`,rtime_last_played:100,playtime_forever:60}));
+ await db.put('sessions','batch-session',{user:{steamid:'1'}});
+ await db.put('user:batch','job:scan',{jobId:'batch',sessionId:'batch-session',status:'running',cursor:-1,games:[],startedAt:Date.now()});
+ let active=0,maxActive=0;
+ const dependencies={db,config:{key:'test'},steam:{owned:async()=>games,updates:async g=>{active++;maxActive=Math.max(active,maxActive);await new Promise(r=>setTimeout(r,2));active--;if(g.appid===2)throw new Error('Steam unavailable');return {events:[{kind:'release'}]};},metadata:async()=>({genres:['Action'],categories:[38]})},enqueue:async m=>messages.push(m)};
+ const initial={alias:'batch',type:'scan',jobId:'batch',cursor:-1};await step(initial,dependencies);assert.equal(messages.length,20);
+ const chunks=messages.splice(0);for(const chunk of chunks){await step(chunk,dependencies);await step(chunk,dependencies);}
+ assert.equal(messages.length,0,'Chunk workers must never publish more messages');
+ const job=await db.get('user:batch','job:scan');assert.equal(job.status,'complete');assert.equal(job.done,60);assert.equal(job.failed,1);assert.equal(job.games.length,59);assert.equal(new Set(job.games.map(g=>g.appid)).size,59);assert.equal(maxActive,3);
+ await step(initial,dependencies);assert.equal(messages.length,0);
+});
+test('initializer retry schedules only remaining work after partial fanout',async t=>{
+ const db=await temporaryStore(t),messages=[];
+ await db.put('user:retry','job:scan',{jobId:'retry',status:'running',cursor:6,total:15,games:[]});
+ await step({alias:'retry',type:'scan',jobId:'retry',cursor:-1},{db,enqueue:async m=>messages.push(m)});
+ assert.deepEqual(messages.map(m=>m.cursor),[6,9,12]);
+});
