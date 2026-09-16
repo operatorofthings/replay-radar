@@ -4,14 +4,23 @@ export function classify(item) {
   const title = String(item.title||'').toLowerCase();
   // Publisher headlines are evidence, not a structured release database.
   if (/\b(coming soon|coming on|arrives on|releases on|launches on|roadmap|preview|teaser|wishlist|announc\w*|upcoming|next week|tomorrow|demnächst|angekündigt|erscheint am|bald|sale|discount|% off|livestream|live stream|giveaway|soundtrack|hotfix|bugfix|patch notes)\b/.test(title)) return null;
+  // Future tense and editorial/community posts are not released gameplay.
+  if (/\b(survey|poll|questionnaire|feedback|umfrage|price|pricing|preis|anniversary|retrospective)\b|\b(?:an? )?update from\b/.test(title)) return null;
+  if (/\b(will|going to|scheduled|planned|plans for|release date|launch date|releasing|launching soon)\b|\bnext (week|month|year|season)\b/.test(title)) return null;
+  if (/\b(?:on|in|this)\s+(?:september|october|november|december|january|february|march|april|may|june|july|august|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(?:st|nd|rd|th)?\b)/.test(title)) return null;
   // A shop rotation is not new gameplay. Match entire version tokens, never
   // a suffix such as 11.1.0 or 0.1.0. Bare version numbers are not launch proof.
   if (/\b(store|shop|item shop)\s+(update|rotation|refresh)\b|\b(shop|store)-update\b/.test(title)) return null;
   const addon=/\b(dlc|expansion|erweiterung)\b/.test(title);
-  if (addon && /\b(out|available|released|launch|live|now|da|verfügbar|erschienen)\b/.test(title)) return 'dlc';
+
   const versionOne=/(?<![\w.])v?1\.0(?:\.0)?(?![\w.]|[- ]?(?:beta|alpha|rc)\b)/.test(title);
-  const launch=/\b(release|released|launch|launched|out now|is out|available now|now available|is live|veröffentlicht|erschienen|jetzt verfügbar)\b/.test(title);
-  if (!addon && (/\b(full release|full launch|leav(?:es|ing|e) early access|out of early access|vollversion)\b/.test(title) || versionOne&&launch)) return 'release';
+  const available=/\b(is (?:now )?(?:out|live|available)|out now|available now|now available|has launched|have launched|released|veröffentlicht|erschienen|jetzt verfügbar)\b/.test(title);
+  if (addon && available) return 'dlc';
+  const fullVersion=/\b(full release|full launch|vollversion)\b/.test(title);
+  const exitedEarlyAccess=/\b(?:(?:has|have) left|out of) early access\b|\b(?:leaving|leaves) early access (?:today|now)\b/.test(title);
+  if (!addon && (exitedEarlyAccess || (versionOne||fullVersion)&&available)) return 'release';
+  // Do not downgrade ambiguous release announcements to content updates.
+  if (versionOne||fullVersion||/\bearly access\b/.test(title)) return null;
   if (/\b(major|massive|biggest|content|großes) update|new (biome|chapter|campaign)|neues kapitel/.test(title)) return 'major';
   if (/\b(update|new content|new map|new season|neue inhalte)\b/.test(title)) return 'update';
   return null;

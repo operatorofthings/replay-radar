@@ -72,7 +72,7 @@ Keine regelmäßigen Vollscans und kein nächtlicher Scheduler. Nach einem Seite
 
 ## Infrastruktur und Betrieb
 
-Pfad: `/home/jsteiner/src/replay-radar/infra`
+Pfad: `~/src/replay-radar/infra`
 
 - `versions.tf`: Region, Provider, Variablen; Provider-Versionen zusätzlich in `.terraform.lock.hcl` fixiert.
 - `backend.tf`: DynamoDB mit TTL, SQS + Dead Letter Queue, zwei Lambdas, IAM, Logs und öffentliche Origin-Konfiguration.
@@ -86,7 +86,7 @@ WAF: AWS IP Reputation, Common Rule Set und Rate Limit von 500 Requests pro IP i
 ### Infrastruktur bereitstellen
 
 ```bash
-cd /home/jsteiner/src/replay-radar
+cd ~/src/replay-radar
 export PATH="$PWD/.runtime/bin:$PATH"
 npm ci
 npm test
@@ -176,3 +176,5 @@ Die FIFO-Reihenfolge und gespeicherten Cursor verhindern Doppelzählungen. Wiede
 ### Klassifizierung gespeicherter News
 
 News-Titel werden beim Lesen öffentlicher News-Caches und persönlicher Radar-Snapshots mit den aktuellen Regeln erneut klassifiziert. So korrigieren Regeländerungen auch bestehende Ergebnisse ohne neuen Steam-Scan oder kostenpflichtige Datenmigration. Reine Store-/Shop-Updates zählen nicht als Spielinhalte. Das 1.0-Label benötigt eine vollständige Versionsnummer mit Veröffentlichungsbezug oder eine ausdrückliche Vollversions-/Early-Access-Meldung; `11.1.0` ist keine Vollversion. Die Einordnung bleibt eine Heuristik aus Entwicklerüberschriften.
+
+Release-Ankündigungen ohne eindeutigen Verfügbarkeitsnachweis werden nicht gewertet, ebenso wenig Umfragen, Preisänderungen und redaktionelle „Update from“-Meldungen. Eine tatsächliche „1.0 Release is live“-Meldung bleibt ein Release; ein zukünftiges „leaving Early Access“ alleine genügt nicht.

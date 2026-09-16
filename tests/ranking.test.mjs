@@ -46,8 +46,8 @@ test('weighted wheel intervals, selection and displayed probabilities agree incl
 test('release detection uses whole versions and launch evidence, excluding store rotations',()=>{
  for(const title of ['Store Update 11.1.0','Store Update 11.2.0','Store Update 1.0','Shop Update 1.0 is out now','Item Shop rotation'])assert.equal(classify({title}),null,title);
  for(const version of ['11.1.0','0.1.0','2.1.0','101.0','1.0.1','1.0.0.1','1.0-beta','1.0rc1'])assert.equal(classify({title:`Update ${version} is out now`}),'update',version);
- for(const title of ['Version 1.0 is out now!','v1.0 launch','Update 1.0.0 released','Full release is live','We are out of early access!'])assert.equal(classify({title}),'release',title);
- assert.equal(classify({title:'Update 1.0'}),'update');
+ for(const title of ['Version 1.0 is out now!','v1.0 has launched','Update 1.0.0 released','Full release is live','We are out of early access!'])assert.equal(classify({title}),'release',title);
+ assert.equal(classify({title:'Update 1.0'}),null);
  assert.equal(classify({title:'DLC 1.0 available now'}),'dlc');
  assert.equal(classify({title:'Version 1.0 coming soon'}),null);
 });
@@ -57,4 +57,12 @@ test('stored misclassifications are corrected without fetching news or changing 
  assert.deepEqual(games.map(g=>g.appid),[1,3]);assert.equal(games[0].events[0].kind,'update');assert.equal(games[0].events.length,1);
  assert.equal(scoreGame(games[0]).base,15);assert.equal(events[1].kind,'release','Do not mutate persisted snapshots');
  assert.deepEqual(reclassifyEvents(games[0].events),games[0].events);
+});
+
+test('Dragonwilds announcements and surveys do not score; actual full release still counts',()=>{
+ const excluded=["Dragonwilds Is Leaving Early Access. Our Price Isn't.","We're leaving Early Access and launching on consoles on September 15th!",'Our 0.12.1 Update Survey is now live!',"Kuldra’s Saga - An Update From Mod Dutch",'Our 0.12 Update Survey is now live!','Our 0.11 Update Survey is now live!','Full release','1.0 release','Update 1.0 will be available soon','Our 1.0 release date','1.0 launches in October','DLC launch','Full release next month'];
+ for(const title of excluded)assert.equal(classify({title}),null,title);
+ const title='Eye on Ashenfall | Our 1.0 Release is live!';assert.equal(classify({title}),'release');
+ const events=reclassifyEvents([...excluded.map(title=>({title,kind:'release',date:100})),{title,kind:'release',date:200}]);
+ assert.equal(events.length,1);assert.equal(scoreGame({events},undefined,{},200).depth,0);assert.equal(scoreGame({events},undefined,{},200).score,104);
 });
