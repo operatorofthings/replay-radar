@@ -1,0 +1,44 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {classify,relevantEvents,scoreEvents,commonCoop,scoreGame,wheelSegments,pickSegment} from '../server/ranking.mjs';
+test('release outranks DLC, major and ordinary updates even when many small updates arrive',()=>{
+ assert.equal(classify({title:'Version 1.0 is out now!'}),'release');
+ assert.equal(classify({title:'New expansion available now'}),'dlc');
+ assert.equal(classify({title:'Major update is live'}),'major');
+ assert.equal(classify({title:'0.7 update'}),'update');
+ assert.ok(scoreEvents([{kind:'release'}])>scoreEvents(Array(60).fill({kind:'dlc'})));
+ assert.ok(scoreEvents([{kind:'dlc'}])>scoreEvents(Array(60).fill({kind:'major'})));
+ assert.ok(scoreEvents([{kind:'major'}])>scoreEvents(Array(60).fill({kind:'update'})));
+});
+test('excludes promotions, future announcements and maintenance headlines',()=>{
+ for(const title of ['1.0 coming soon','Expansion launches on October 1','1.0 preview','1.0 announcement','Update roadmap','New update sale','Hotfix 1.0.3','DLC soundtrack released','Update next week'])assert.equal(classify({title}),null,title);
+ assert.equal(classify({title:'Update 1.0.3'}),'update');
+});
+test('only official news strictly after last played, without future items or duplicates',()=>{
+ const row={gid:'1',title:'1.0 is out now',date:200,feedname:'steam_community_announcements'};
+ assert.equal(relevantEvents([row,row,{...row,gid:'2',date:100},{...row,gid:'3',date:400},{...row,gid:'4',feedname:'pcgamer'}],100,300).length,1);
+ assert.deepEqual(relevantEvents([row],0,300),[]);
+});
+test('custom weights change the score predictably',()=>assert.equal(scoreEvents([{kind:'release'},{kind:'dlc'}],{release:10,dlc:90}),90.4));
+test('coop requires ownership by both and correct game category',()=>{
+ const mine=[{appid:1},{appid:2},{appid:3},{appid:4}];const theirs=[{appid:1},{appid:2},{appid:3}];
+ const metadata=new Map([[1,{categories:[38]}],[2,{categories:[39]}],[3,{categories:[1]}],[4,{categories:[38]}]]);
+ assert.deepEqual(commonCoop(mine,theirs,metadata),[{appid:1}]);
+ assert.deepEqual(commonCoop(mine,theirs,metadata,'all'),[{appid:1},{appid:2}]);
+});
+
+test('score differentiates freshness and rewards variety only with real recent data',()=>{
+ const now=1800000000,base={genres:['Simulation'],events:[{kind:'release',date:now-86400}]};
+ const plain=scoreGame(base,undefined,{},now),varied=scoreGame(base,undefined,{Action:120},now);
+ assert.equal(plain.variety,0);assert.equal(varied.variety,3);
+ assert.ok(varied.score>scoreGame(base,undefined,{Simulation:120},now).score);
+ assert.ok(plain.score>scoreGame({...base,events:[{kind:'release',date:now-86400*365}]},undefined,{},now).score);
+ assert.ok(scoreGame({events:Array.from({length:500},()=>({kind:'dlc',date:now})),genres:['Simulation']},undefined,{Action:1},now).score<100);
+});
+test('weighted wheel intervals, selection and displayed probabilities agree including hundreds of games',()=>{
+ const segments=wheelSegments([{appid:1,score:100},{appid:2,score:0}],true);
+ assert.equal(segments[0].chance,.75);assert.equal(pickSegment(segments,.749).game.appid,1);assert.equal(pickSegment(segments,.75).game.appid,2);
+ const many=wheelSegments(Array.from({length:500},(_,appid)=>({appid,score:appid%110})),true);
+ assert.equal(many.length,500);assert.ok(Math.abs(many.at(-1).end-1)<1e-12);
+ for(const s of many)assert.equal(pickSegment(many,(s.start+s.end)/2).game.appid,s.game.appid);
+});

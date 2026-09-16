@@ -1,0 +1,31 @@
+{
+  "name": "replay-radar",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env server/index.mjs",
+    "build": "vite build",
+    "start": "node --env-file-if-exists=.env server/index.mjs --production",
+    "test": "node --test tests/*.test.mjs",
+    "build:aws": "node scripts/build-aws.mjs",
+    "test:ui": "playwright test"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1133.0",
+    "@aws-sdk/client-sqs": "^3.1133.0",
+    "@aws-sdk/client-ssm": "^3.1133.0",
+    "@aws-sdk/lib-dynamodb": "^3.1133.0",
+    "@codegenie/serverless-express": "^4.17.1",
+    "express": "^5.1.0",
+    "lucide-react": "^0.468.0",
+    "openid": "^2.0.14",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "esbuild": "^0.28.2",
+    "vite": "^6.4.1"
+  }
+}

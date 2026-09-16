@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.cache/
+.runtime/
+*.log
+test-results/
+.sites-runtime/
+.build/
+infra/.terraform/
+infra/*.tfstate*
+infra/*.tfplan
+infra/*.auto.tfvars
+infra/crash.log
+
+# Local handover and deployment notes
+docs/NEXT_SESSION_*.md
