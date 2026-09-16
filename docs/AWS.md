@@ -159,3 +159,7 @@ Zuerst Terraform-Destroy-Plan prüfen. Der Bucket erlaubt kein `force_destroy` u
 - CloudFormation-Free-Subscription: ACTIVE.
 - Automatische Tests: 12 Node-Tests und 11 Browser-Tests; GitHub CI ebenfalls erfolgreich.
 - Ein kompletter persönlicher Login mit anschließendem echten Radar-Scan und Freundesvergleich bleibt ein interaktiver Abnahmeschritt.
+
+- [GitHub-Deployment mit OIDC erfolgreich](https://github.com/operatorofthings/replay-radar/actions/runs/35069327916).
+- Produktions-Browsertest: Einführung, Score-Erklärung, Sofort-Ausblenden/Rückgängig, gewichtetes Rad und Steam-Redirect mit Secure-/HttpOnly-Cookie erfolgreich, keine Browserfehler.
+- Live-DynamoDB-Test mit kurzlebiger synthetischer Testsitzung: getrennte Radar-/Koop-Präferenzen, Wiederherstellung und Logout erfolgreich; Testdaten anschließend entfernt.
