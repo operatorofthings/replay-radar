@@ -10,7 +10,8 @@ export async function pool(items, concurrency, fn) {
 }
 export async function requestJson(url, options={}) {
   for(let attempt=0;attempt<2;attempt++) {
-    const response=await fetch(url,{...options,signal:AbortSignal.timeout(8000)});
+    let response;
+    try{response=await fetch(url,{...options,signal:AbortSignal.timeout(8000)});}catch(error){if(attempt<1){await pause(1500);continue;}throw error;}
     if((response.status===429 || response.status>=500) && attempt<1){await pause(1500);continue;}
     if(!response.ok) {const error=new Error(response.status===401||response.status===403?'Steam verweigert den Zugriff. Prüfe API-Key und Profil-Privatsphäre.':`Steam ist momentan nicht erreichbar (HTTP ${response.status}).`);error.status=response.status;throw error;}
     return response.json();
@@ -38,11 +39,16 @@ export async function players(ids,key) {
   for(let i=0;i<ids.length;i+=100){const r=await steam('ISteamUser/GetPlayerSummaries/v2',{steamids:ids.slice(i,i+100).join(',')},key);result.push(...(r.response?.players||[]));}
   return result.map(p=>({steamid:p.steamid,name:p.personaname,avatar:p.avatarmedium}));
 }
+export async function cachedMetadata(appid) {
+  const db=await storage(),record=await db.get('public-cache',`store-v1-${appid}`);
+  return record?.freshUntil>Date.now()?record.value:null;
+}
 export async function metadata(appid) {
-  return cached(`store-v1-${appid}`,86400000,()=> {
+  return cached(`store-v1-${appid}`,7*DAY*1000,()=> {
     const task=storeTail.then(async()=> {
+      const started=Date.now();
       try {const result=await requestJson(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=german`);const d=result[appid]?.data;if(!d)throw new Error('Store-Metadaten fehlen');return {image:d.header_image,genres:(d.genres||[]).map(g=>g.description),categories:(d.categories||[]).map(c=>c.id)};}
-      finally {await pause(1600);}
+      finally {await pause(Math.max(0,1600-(Date.now()-started)));}
     });storeTail=task.catch(()=>{});return task;
   });
 }

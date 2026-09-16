@@ -149,3 +149,18 @@ test('one remaining candidate is revealed immediately without fake suspense',asy
  await page.getByRole('button',{name:'Spiel auslosen',exact:true}).click();
  await expect(page.locator('.result-box h3')).toHaveText('Satisfactory',{timeout:1000});
 });
+
+test('cached friend comparisons remain selectable and explain incomplete Steam checks',async({page})=>{
+ await page.route('**/api/session',r=>r.fulfill({json:{user:{name:'Testspieler'},keyConfigured:true,hasKey:true}}));
+ await page.route('**/api/preferences',r=>r.fulfill({json:{preferences:[]}}));
+ await page.route('**/api/scan',r=>r.fulfill({json:{status:'idle',games:[]}}));
+ await page.route('**/api/friends',r=>r.fulfill({json:{friends:[{steamid:'A',name:'Freund A'},{steamid:'B',name:'Freund B'}]}}));
+ const requests=[];
+ await page.route('**/api/coop',r=>{const {friend}=r.request().postDataJSON();requests.push(friend);return r.fulfill({json:{status:'complete',cached:requests.length===3,failed:1,games:[{appid:1,name:`Spiel mit ${friend}`}],failures:[{appid:2,name:'Unbekannter Titel',reason:'Steam liefert für diesen Titel keine Store-Daten.'}]}});});
+ await page.goto('http://localhost:4317');
+ for(const friend of ['A','B','A']){await page.locator('#friend').selectOption(friend);await page.getByRole('button',{name:'Gemeinsame Spiele prüfen'}).click();await expect(page.getByRole('button',{name:'Spiel auslosen',exact:true})).toBeEnabled();}
+ expect(requests).toEqual(['A','B','A']);
+ await expect(page.getByText('Gespeicherter Vergleich · ohne erneuten Scan.')).toBeVisible();
+ await page.getByText('1 Spiele konnten nicht auf Koop geprüft werden.').click();
+ await expect(page.getByText('Unbekannter Titel: Steam liefert für diesen Titel keine Store-Daten.')).toBeVisible();
+});

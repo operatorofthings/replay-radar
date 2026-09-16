@@ -8,7 +8,7 @@ import {createServer} from 'node:http';
 import {FileStore,DynamoStore,DAY} from '../server/storage.mjs';
 import {makePreference,isSuppressed} from '../server/preferences.mjs';
 import {createApp} from '../server/app.mjs';
-import {step} from '../server/jobs.mjs';
+import {step,startJob} from '../server/jobs.mjs';
 import {userAlias} from '../server/config.mjs';
 async function temporaryStore(t){const dir=await mkdtemp(path.join(os.tmpdir(),'replay-test-'));t.after(()=>rm(dir,{recursive:true,force:true}));return new FileStore(dir);}
 test('preferences expire exactly and invalid durations are rejected',()=>{
@@ -77,4 +77,34 @@ test('initializer retry schedules only remaining work after partial fanout',asyn
  await db.put('user:retry','job:scan',{jobId:'retry',status:'running',cursor:6,total:15,games:[]});
  await step({alias:'retry',type:'scan',jobId:'retry',cursor:-1},{db,enqueue:async m=>messages.push(m)});
  assert.deepEqual(messages.map(m=>m.cursor),[6,9,12]);
+});
+
+test('friend A/B/A reuses isolated comparisons and releases admission after completion',async t=>{
+ const db=await temporaryStore(t),messages=[],account={alias:'cache',sessionId:'cache-session'};
+ const games=Array.from({length:135},(_,i)=>({appid:i+1,name:`Game ${i+1}`}));
+ await db.put('sessions',account.sessionId,{user:{steamid:'me'}});
+ const dependencies={db,config:{key:'test'},enqueue:async m=>messages.push(m),steam:{owned:async id=>id==='B'?games.slice(0,35):games,cachedMetadata:async()=>({genres:[],categories:[38]}),metadata:async()=>{throw new Error('warm comparisons must not call Steam Store');}}};
+ for(const [friend,total] of [['A',135],['B',35]]){
+   await startJob(account,'coop',{friend},dependencies);
+   assert.equal(messages.length,1);await step(messages.shift(),dependencies);
+   const result=await db.get('user:cache','job:coop');assert.equal(result.status,'complete');assert.equal(result.done,total);assert.equal(result.games.length,total);assert.equal(messages.length,0);
+   assert.equal(await db.get('user:cache','admission:coop'),null);
+ }
+ const cached=await startJob(account,'coop',{friend:'A'},dependencies);
+ assert.equal(cached.cached,true);assert.equal(cached.games.length,135);assert.equal(messages.length,0);
+ await startJob(account,'coop',{friend:'A',mode:'all'},dependencies);assert.equal(messages.length,1);await step(messages.shift(),dependencies);
+ await startJob({...account,alias:'other'},'coop',{friend:'A'},dependencies);assert.equal(messages.length,1,'another user cannot reuse this private comparison');
+});
+test('mixed cache hits and misses keep complete progress and bounded nonrecursive fanout',async t=>{
+ const db=await temporaryStore(t),messages=[],account={alias:'mixed',sessionId:'mixed-session'};
+ const games=Array.from({length:10},(_,i)=>({appid:i+1,name:`Game ${i+1}`}));let storeCalls=0;
+ await db.put('sessions',account.sessionId,{user:{steamid:'me'}});
+ const dependencies={db,config:{key:'test'},enqueue:async m=>messages.push(m),steam:{owned:async()=>games,cachedMetadata:async id=>id<=6?{categories:id===1?[]:[38]}:null,metadata:async id=>{storeCalls++;if(id===10)throw new Error('Store-Metadaten fehlen');return {categories:[38]};}}};
+ await startJob(account,'coop',{friend:'A'},dependencies);await step(messages.shift(),dependencies);
+ let job=await db.get('user:mixed','job:coop');assert.equal(job.total,10);assert.equal(job.done,6);assert.deepEqual(messages.map(m=>m.cursor),[0,3]);
+ const chunks=messages.splice(0);for(const m of chunks){await step(m,dependencies);await step(m,dependencies);}
+ job=await db.get('user:mixed','job:coop');assert.equal(job.status,'complete');assert.equal(job.done,10);assert.equal(job.failed,1);assert.equal(job.failures[0].appid,10);assert.equal(job.games.length,8);assert.equal(storeCalls,4);assert.equal(messages.length,0);
+ assert.equal((await startJob(account,'coop',{friend:'A'},dependencies)).cached,true);
+ job.startedAt=Date.now()-6*60000;await db.put('user:mixed','job:coop',job);await db.put('user:mixed',`coop-result:${job.friendKey}:online`,job);
+ assert.equal((await startJob(account,'coop',{friend:'A'},dependencies)).status,'running');assert.equal(messages.length,1);
 });

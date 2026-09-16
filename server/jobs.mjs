@@ -5,6 +5,8 @@ import * as steam from './steam.mjs';
 import {commonCoop} from './ranking.mjs';
 
 let localTail=Promise.resolve();
+const coopCacheKey=(friendKey,mode)=>`coop-result:${friendKey}:${mode}`;
+const reusable=j=>j?.status==='complete'&&Date.now()-j.startedAt<(j.failed?5*60000:DAY*1000);
 const publicJob=j=>j?Object.fromEntries(Object.entries(j).filter(([k])=>!['todo','sessionId','friend','friendKey','jobId','cursor'].includes(k))):{status:'idle',games:[]};
 export async function readJob(alias,type){const db=await storage();const job=await db.get(`user:${alias}`,`job:${type}`);if(job?.status==='running'&&Date.now()-job.updatedAt>30*60000){job.status='error';job.error='Der Scan wurde unterbrochen. Bitte erneut starten.';}return publicJob(job);}
 async function enqueueBatch(messages){
@@ -16,18 +18,22 @@ async function enqueueBatch(messages){
 async function enqueue(message){return enqueueBatch([message]);}
 async function dispatch(message,job,send){
  // One initialization fans out finite chunks. Chunk workers NEVER enqueue work.
- const messages=[];for(let cursor=job.cursor;cursor<job.total;cursor+=3)messages.push({...message,cursor});
+ const messages=[];for(let cursor=job.cursor;cursor<(job.todo?.length??job.total);cursor+=3)messages.push({...message,cursor});
  if(send){for(const item of messages)await send(item);}else await enqueueBatch(messages);
 }
-export async function startJob(account,type,{friend,mode='online'}={}){
- const db=await storage(),pk=`user:${account.alias}`,sk=`job:${type}`;
+export async function startJob(account,type,{friend,mode='online'}={},dependencies={}){
+ const db=dependencies.db||await storage(),pk=`user:${account.alias}`,sk=`job:${type}`;
  const previous=await db.get(pk,sk),now=Date.now(),friendKey=friend?createHash('sha256').update(account.alias+friend).digest('hex'):undefined;
  if(previous?.status==='running'&&now-previous.updatedAt<30*60000){if(type==='coop'&&(previous.friendKey!==friendKey||previous.mode!==mode))throw new Error('Der bisherige Freundesvergleich läuft noch. Bitte kurz warten.');return publicJob(previous);}
  if(type==='scan'&&previous?.status==='complete'&&now-previous.startedAt<DAY*1000)return {...publicJob(previous),cached:true};
- if(type==='coop'&&previous?.status==='complete'&&previous.friendKey===friendKey&&previous.mode===mode&&now-previous.startedAt<DAY*1000)return {...publicJob(previous),cached:true};
+ if(type==='coop'){
+   const saved=await db.get(pk,coopCacheKey(friendKey,mode));
+   const hit=reusable(saved)?saved:previous?.friendKey===friendKey&&previous.mode===mode&&reusable(previous)?previous:null;
+   if(hit)return {...publicJob(hit),cached:true};
+ }
  if(!await db.claim(pk,`admission:${type}`,{at:now},type==='scan'&&previous?.status==='complete'?DAY:60))throw new Error('Dieser Scan wurde gerade gestartet. Bitte kurz warten.');
  const job={jobId:randomUUID(),sessionId:account.sessionId,friend,friendKey,mode,cursor:-1,todo:[],status:'running',total:0,done:0,failed:0,truncated:0,metadataFailed:0,games:[],startedAt:now,updatedAt:now};
- await db.put(pk,sk,job);try{await enqueue({alias:account.alias,type,jobId:job.jobId,cursor:-1});}catch(e){job.status='error';job.error='Der Scan konnte nicht gestartet werden.';await db.put(pk,sk,job);await db.delete(pk,`admission:${type}`);throw e;}
+ await db.put(pk,sk,job);try{await (dependencies.enqueue||enqueue)({alias:account.alias,type,jobId:job.jobId,cursor:-1});}catch(e){job.status='error';job.error='Der Scan konnte nicht gestartet werden.';await db.put(pk,sk,job);await db.delete(pk,`admission:${type}`);throw e;}
  return publicJob(job);
 }
 export async function step(message,dependencies={}){
@@ -49,7 +55,12 @@ export async function step(message,dependencies={}){
      }else{
        const ownedByFriend=new Set((await remote.owned(job.friend,key)).map(g=>g.appid));job.todo=library.games.filter(g=>ownedByFriend.has(g.appid));
      }
-     job.total=job.todo.length;job.cursor=0;job.queueMode='fanout-v1';delete job.sessionId;delete job.friend;
+     job.total=job.todo.length;job.cachedCount=0;
+     if(type==='coop'&&remote.cachedMetadata){
+       const known=await steam.pool(job.todo,8,game=>remote.cachedMetadata(game.appid));
+       job.todo=job.todo.filter((game,i)=>{const meta=known[i];if(!meta)return true;job.cachedCount++;if(commonCoop([game],[game],new Map([[game.appid,meta]]),job.mode).length)job.games.push({appid:game.appid,name:game.name,icon:game.icon,...meta});return false;});
+     }
+     job.done=job.cachedCount;job.cursor=0;job.queueMode='fanout-v1';delete job.sessionId;delete job.friend;
    }else{
      // A bounded group reduces queue round trips; Store requests remain serialized.
      const started=Date.now(),batch=job.todo.slice(job.cursor,job.cursor+3);
@@ -63,20 +74,24 @@ export async function step(message,dependencies={}){
            if(news.events.length){if(!meta)try{meta=await remote.metadata(game.appid);}catch{result.metadataFailed++;}
              result.game={appid:game.appid,name:game.name,icon:game.icon,lastPlayed:game.rtime_last_played,minutes:game.playtime_forever,genres:[],categories:[],...meta,...news};}
          }else{meta=await remote.metadata(game.appid);if(commonCoop([game],[game],new Map([[game.appid,meta]]),job.mode).length)result.game={appid:game.appid,name:game.name,icon:game.icon,...meta};}
-       }catch{result.failed++;}
+       }catch(error){result.failed++;result.failure={appid:game.appid,name:game.name,reason:error.status?`Steam antwortet mit HTTP ${error.status}.`:error.message==='Store-Metadaten fehlen'?'Steam liefert für diesen Titel keine Store-Daten.':'Steam-Abfrage fehlgeschlagen oder Zeitlimit erreicht.'};}
        return result;
      }));
      for(const result of results){
        for(const field of ['failed','truncated','metadataFailed','recentGenreGames'])job[field]=(job[field]||0)+result[field];
        job.recentGenres ||= {};for(const [genre,minutes] of Object.entries(result.recentGenres))job.recentGenres[genre]=(job.recentGenres[genre]||0)+minutes;
        if(result.game)job.games.push(result.game);
+       if(result.failure){job.failures ||= [];job.failures.push(result.failure);}
      }
      job.processingMs=(job.processingMs||0)+Date.now()-started;
      job.timedGames=(job.timedGames||0)+batch.length;
-     job.cursor+=batch.length;job.done=job.cursor;
+     job.cursor+=batch.length;job.done=(job.cachedCount||0)+job.cursor;
    }
-   if(job.cursor>=job.total){job.status='complete';job.finishedAt=Date.now();job.refreshAfter=job.startedAt+DAY*1000;job.expiresAt=Date.now()+RETENTION*1000;delete job.todo;}
-   job.updatedAt=Date.now();await db.put(pk,sk,job);
+   if(job.cursor>=job.todo.length){job.status='complete';job.finishedAt=Date.now();job.refreshAfter=job.startedAt+DAY*1000;job.expiresAt=Date.now()+RETENTION*1000;delete job.todo;}
+   job.updatedAt=Date.now();
+   if(type==='coop'&&job.status==='complete')await db.put(pk,coopCacheKey(job.friendKey,job.mode),job);
+   await db.put(pk,sk,job);
+   if(type==='coop'&&job.status==='complete')await db.delete(pk,'admission:coop');
  }catch(e){job.status='error';job.error=e.message;delete job.todo;await db.put(pk,sk,job);await db.delete(pk,`admission:${type}`);return;}
  // Only the initializer publishes chunks. Retrying it resumes at the persisted
  // cursor; completed/duplicate chunks cannot create another invocation chain.

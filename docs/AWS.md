@@ -56,7 +56,9 @@ Der CloudFront-Free-Plan deckelt **nicht** die Rechnung von Lambda, DynamoDB ode
 | Radar-Snapshot | Gefundene Spiele, News-Titel, Quellen, Kategorien, Score-Grundlagen, Scan-Zeit | Bis 7 Tage direkt anzeigen; neuer Scan frühestens nach 24 h und nur auf Anforderung |
 | „Keine Lust“ | AppID, Titel, Ablaufzeit | Für 7 Tage ausblenden; jederzeit wiederherstellbar |
 | „Später nochmal“ | AppID, Titel, Zeitpunkt | 1, 3 oder 7 Tage; danach automatisch sichtbar |
-| Öffentliche Steam-Metadaten | Genre, Koop-Kategorien, Cover-URL, relevante News | 24 h frisch, bis 7 Tage Aufbewahrung |
+| Öffentliche Steam-Metadaten | Genre, Koop-Kategorien, Cover-URL | 7 Tage frisch und Aufbewahrung; Koop initialisiert bekannte Titel direkt aus dem Cache |
+| Öffentliche News | Relevante Meldungen | 24 h frisch, bis 7 Tage Aufbewahrung |
+| Freundesvergleiche | Ergebnis pro Nutzeralias, Freundes-Hash und Modus | 24 h wiederverwendbar, bei fehlgeschlagenen Prüfungen 5 Minuten; Löschung nach 7 Tagen |
 | Anmeldung | SteamID, angezeigter Name/Avatar, HMAC-Alias | 12 Stunden; Sitzungscookie ist zufällig, serverseitig wird nur sein Hash als Schlüssel verwendet |
 | Freundesliste | Namen, Avatar-URLs, SteamIDs | 24 Stunden, damit Auswahl und Eigentumsvergleich funktionieren |
 | OpenID-Zustand | Einmaliger Login-Vorgang | 10 Minuten; atomar verbraucht |
