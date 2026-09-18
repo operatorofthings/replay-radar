@@ -53,7 +53,7 @@ Der CloudFront-Free-Plan deckelt **nicht** die Rechnung von Lambda, DynamoDB ode
 |---|---|---|
 | Nutzer-Partition | HMAC-Alias aus SteamID + serverseitigem Salt | Kein Klarname im Partitionsschlüssel |
 | Bibliothek | AppID, Titel, Spielminuten insgesamt/letzte 14 Tage, Icon, letzter Spielzeitpunkt | 24 h frisch; nach 7 Tagen nicht mehr verwendbar |
-| Radar-Snapshot | Gefundene Spiele, News-Titel, Quellen, Kategorien, Score-Grundlagen, Scan-Zeit | Bis 7 Tage direkt anzeigen; neuer Scan frühestens nach 24 h und nur auf Anforderung |
+| Radar-Snapshot | Gefundene Spiele, News-Titel, Quellen, Kategorien, Score-Grundlagen, Scan-Zeit | Bis 7 Tage direkt anzeigen; manuelle Bibliotheksaktualisierung mit mindestens einer Minute Abstand |
 | „Keine Lust“ | AppID, Titel, Ablaufzeit | Für 7 Tage ausblenden; jederzeit wiederherstellbar |
 | „Später nochmal“ | AppID, Titel, Zeitpunkt | 1, 3 oder 7 Tage; danach automatisch sichtbar |
 | Öffentliche Steam-Metadaten | Genre, Koop-Kategorien, Cover-URL | 7 Tage frisch und Aufbewahrung; Koop initialisiert bekannte Titel direkt aus dem Cache |
@@ -178,3 +178,9 @@ Die FIFO-Reihenfolge und gespeicherten Cursor verhindern Doppelzählungen. Wiede
 News-Titel werden beim Lesen öffentlicher News-Caches und persönlicher Radar-Snapshots mit den aktuellen Regeln erneut klassifiziert. So korrigieren Regeländerungen auch bestehende Ergebnisse ohne neuen Steam-Scan oder kostenpflichtige Datenmigration. Reine Store-/Shop-Updates zählen nicht als Spielinhalte. Das 1.0-Label benötigt eine vollständige Versionsnummer mit Veröffentlichungsbezug oder eine ausdrückliche Vollversions-/Early-Access-Meldung; `11.1.0` ist keine Vollversion. Die Einordnung bleibt eine Heuristik aus Entwicklerüberschriften.
 
 Release-Ankündigungen ohne eindeutigen Verfügbarkeitsnachweis werden nicht gewertet, ebenso wenig Umfragen, Preisänderungen und redaktionelle „Update from“-Meldungen. Eine tatsächliche „1.0 Release is live“-Meldung bleibt ein Release; ein zukünftiges „leaving Early Access“ alleine genügt nicht.
+
+## Discover and library refresh
+
+Discover uses the same finite worker queue. Its initializer loads a shared daily catalogue (up to 200 Steam search results), reads cached tags for up to 16 played games, and queues at most 30 store checks. Profile collection has a 70-second soft budget so degraded Steam responses do not exhaust the 180-second worker timeout. Incomplete tag data is reflected in the profile. No recurring catalogue crawler or new infrastructure is required.
+
+Manual library refresh bypasses the personal library cache, invalidates dependent Discover and co-op snapshots, and preserves public metadata caches. A per-user work lease prevents overlapping jobs; all job types retain finite fanout and recursion protection. Discovery exclusions and dismissals expire after seven days. This introduces bounded extra Steam, DynamoDB and Lambda work; actual costs depend on cache hit rates and traffic.

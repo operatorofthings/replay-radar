@@ -59,8 +59,20 @@ export async function createApp(overrides={}){
    let preference;try{preference=makePreference(req.body);}catch(e){return res.status(400).json({error:e.message});}
    await db.put(pk,`${prefix}:${preference.appid}`,preference,Math.ceil((preference.until-Date.now())/1000));res.json({preference});
  });
- app.post('/api/scan',requireSession,async(req,res)=>{if(!req.account.key&&!cfg.key)return res.status(400).json({error:'Bitte zuerst einen API-Key hinterlegen.'});res.json(await startJob(req.account,'scan'));});
+ app.post('/api/scan',requireSession,async(req,res)=>{if(!req.account.key&&!cfg.key)return res.status(400).json({error:'Bitte zuerst einen API-Key hinterlegen.'});res.json(await startJob(req.account,'scan',{force:req.body.force===true}));});
  app.get('/api/scan',requireSession,async(req,res)=>res.json(await readJob(req.account.alias,'scan')));
+ app.get('/api/discover',requireSession,async(req,res)=>res.json(await readJob(req.account.alias,'discover')));
+ app.post('/api/discover',requireSession,async(req,res)=>res.json(await startJob(req.account,'discover')));
+ app.get('/api/discover/hidden',requireSession,async(req,res)=>res.json({games:await db.list(`user:${req.account.alias}`,'discover-hidden:')}));
+ app.post('/api/discover/hidden',requireSession,async(req,res)=>{const pk=`user:${req.account.alias}`,id=req.body.appid;if(!Number.isSafeInteger(id)||id<=0)return res.status(400).json({error:'Invalid game.'});if(req.body.remove===true){await db.delete(pk,`discover-hidden:${id}`);return res.json({ok:true});}const job=await db.get(pk,'job:discover'),game=job?.games.find(g=>g.appid===id);if(!game)return res.status(400).json({error:'Choose a current recommendation.'});await db.put(pk,`discover-hidden:${id}`,{appid:id,name:game.name});res.json({ok:true});});
+ app.get('/api/discover/exclusions',requireSession,async(req,res)=>res.json({games:await db.list(`user:${req.account.alias}`,'discover-exclude:')}));
+ app.post('/api/discover/exclusions',requireSession,async(req,res)=>{
+  const pk=`user:${req.account.alias}`,id=req.body.appid,library=await db.get(pk,'library');const game=library?.games.find(g=>g.appid===id);
+  if(!game)return res.status(400).json({error:'Choose a game from your library.'});
+  const current=await db.get(pk,'job:discover');if(current?.status==='running')return res.status(409).json({error:'Wait for Discover to finish before editing your profile.'});
+  if(req.body.remove===true)await db.delete(pk,`discover-exclude:${id}`);else await db.put(pk,`discover-exclude:${id}`,{appid:id,name:game.name});
+  await db.delete(pk,'job:discover');res.json({ok:true});
+ });
  app.get('/api/friends',requireSession,async(req,res)=>{
    const s=req.account,pk=`user:${s.alias}`;let cached=await db.get(pk,'friends');
    if(!cached||Date.now()-cached.at>DAY*1000){

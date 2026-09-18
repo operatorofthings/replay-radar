@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 test.beforeEach(async({page})=>{await page.addInitScript(()=>{if(!sessionStorage.getItem('rr_test_boot')){localStorage.setItem('rr_intro_seen','1');localStorage.setItem('rr_language','de');sessionStorage.setItem('rr_test_boot','1');}});});
 test('dashboard filters, ranking controls, detail dialog, friend switch and card shuffle work',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('http://localhost:4317');
+ await page.goto('http://localhost:4317/?preview=1');
  await expect(page.getByRole('heading',{name:/Gute Spiele verdienen/})).toBeVisible();
  await expect(page.locator('.game-card')).toHaveCount(3);
  await page.getByLabel('Genre',{exact:true}).selectOption('Simulation');
@@ -24,13 +24,13 @@ test('dashboard filters, ranking controls, detail dialog, friend switch and card
  expect(errors).toEqual([]);
 });
 test('mobile layout fits the viewport',async({page})=>{
- await page.setViewportSize({width:390,height:844});await page.goto('http://localhost:4317');
+ await page.setViewportSize({width:390,height:844});await page.goto('http://localhost:4317/?preview=1');
  await expect(page.locator('.game-card').first()).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:'test-results/mobile.png',fullPage:true});
 });
 test('desktop cover assets load and screenshot',async({page})=>{
- await page.setViewportSize({width:1440,height:1200});await page.goto('http://localhost:4317');
+ await page.setViewportSize({width:1440,height:1200});await page.goto('http://localhost:4317/?preview=1');
  await expect(page.locator('.game-cover img')).toHaveCount(3);
  await expect.poll(()=>page.locator('.game-cover img').evaluateAll(images=>images.every(i=>i.complete&&i.naturalWidth>0))).toBe(true);
  await page.screenshot({path:'test-results/desktop.png',fullPage:true});
@@ -50,7 +50,7 @@ test('signed-in workflow shows real scan data, partial failures and friend priva
  await page.route('**/api/scan',r=>r.fulfill({json:{status:'complete',games:[record],done:4,total:4,failed:1,truncated:1,metadataFailed:0,unknownCount:2}}));
  await page.route('**/api/friends',r=>r.fulfill({json:{friends:[{steamid:'friend1',name:'Freund Eins'},{steamid:'friend2',name:'Freund Zwei'}]}}));
  await page.route('**/api/coop',r=>r.fulfill({json:{status:'error',games:[],error:'Spieledetails sind nicht sichtbar.'}}));
- await page.goto('http://localhost:4317');
+ await page.goto('http://localhost:4317/?preview=1');
  await expect(page.locator('.mode-pill')).toContainText('Deine Steam-Bibliothek');
  await expect(page.locator('.game-card h3')).toHaveText(record.name);
  await expect(page.locator('.notice')).toContainText('1 News-Abfragen fehlgeschlagen');
@@ -60,7 +60,7 @@ test('signed-in workflow shows real scan data, partial failures and friend priva
 });
 test('WebMCP genre tool updates the same state and rejects unknown input',async({page})=>{
  await page.addInitScript(()=>{window.registeredTools={};Object.defineProperty(document,'modelContext',{value:{registerTool(tool,{signal}){window.registeredTools[tool.name]=tool;signal.addEventListener('abort',()=>delete window.registeredTools[tool.name]);}}});});
- await page.goto('http://localhost:4317');
+ await page.goto('http://localhost:4317/?preview=1');
  await expect.poll(()=>page.evaluate(()=>Boolean(window.registeredTools.filter_replay_games))).toBe(true);
  const result=await page.evaluate(()=>window.registeredTools.filter_replay_games.execute({genre:'Simulation'}));
  expect(result.genre).toBe('Simulation');await expect(page.locator('.game-card')).toHaveCount(1);
@@ -68,7 +68,7 @@ test('WebMCP genre tool updates the same state and rejects unknown input',async(
  await expect(page.getByLabel('Genre',{exact:true})).toHaveValue('Simulation');
 });
 test('dismiss, snooze, reload persistence and restore leave the coop pool unchanged',async({page})=>{
- await page.goto('http://localhost:4317');
+ await page.goto('http://localhost:4317/?preview=1');
  await page.getByRole('button',{name:'Keine Lust auf Satisfactory',exact:true}).click();
  await expect(page.locator('.game-card h3').filter({hasText:'Satisfactory'})).toHaveCount(0);
  await expect(page.locator('.draw-caption')).toContainText('6 GEMEINSAME');
@@ -86,12 +86,12 @@ test('dismiss, snooze, reload persistence and restore leave the coop pool unchan
 });
 test('expired snooze reappears on reload',async({page})=>{
  await page.addInitScript(()=>localStorage.setItem('rr_demo_preferences',JSON.stringify({526870:{appid:526870,name:'Satisfactory',action:'snooze',until:Date.now()-1}})));
- await page.goto('http://localhost:4317');await expect(page.locator('.game-card h3').first()).toHaveText('Satisfactory');
+ await page.goto('http://localhost:4317/?preview=1');await expect(page.locator('.game-card h3').first()).toHaveText('Satisfactory');
  await expect(page.getByRole('button',{name:/zurückgestellt/})).toHaveCount(0);
 });
 
 test('first visit introduction persists and remains available from footer',async({page})=>{
- await page.goto('http://localhost:4317');await page.evaluate(()=>localStorage.removeItem('rr_intro_seen'));await page.reload();
+ await page.goto('http://localhost:4317/?preview=1');await page.evaluate(()=>localStorage.removeItem('rr_intro_seen'));await page.reload();
  await expect(page.getByRole('dialog')).toContainText('Deine Bibliothek. Neu entdeckt.');
  await page.getByText('Steam, Daten & offener Code',{exact:true}).click();
  await expect(page.getByRole('link',{name:/Quellcode/})).toHaveAttribute('href','https://github.com/operatorofthings/replay-radar');
@@ -99,7 +99,7 @@ test('first visit introduction persists and remains available from footer',async
  await page.getByRole('button',{name:'So funktioniert’s'}).click();await expect(page.getByRole('dialog')).toBeVisible();
 });
 test('score explanation, quick action and separate coop preferences work',async({page})=>{
- await page.goto('http://localhost:4317');
+ await page.goto('http://localhost:4317/?preview=1');
  await page.getByLabel('Score für Satisfactory erklären').click();await expect(page.locator('.score-breakdown').first()).toContainText('Abwechslung');await page.getByLabel('Score für Satisfactory erklären').click();await page.locator('h1').click();
  await page.getByRole('button',{name:'Satisfactory sofort bis morgen ausblenden'}).click();await expect(page.locator('.game-card h3').filter({hasText:'Satisfactory'})).toHaveCount(0);
  await page.locator('.coop-library summary').click();
@@ -117,7 +117,7 @@ test('large coop libraries keep every candidate accessible',async({page})=>{
  await page.route('**/api/scan',r=>r.fulfill({json:{status:'complete',games:[]}}));
  await page.route('**/api/friends',r=>r.fulfill({json:{friends:[{steamid:'friend',name:'Friend'}]}}));
  await page.route('**/api/coop',r=>r.fulfill({json:{status:'complete',games}}));
- await page.goto('http://localhost:4317');await page.getByRole('button',{name:'Gemeinsame Spiele prüfen'}).click();
+ await page.goto('http://localhost:4317/?preview=1');await page.getByRole('button',{name:'Gemeinsame Spiele prüfen'}).click();
  await expect(page.locator('.draw-caption')).toContainText('250 GEMEINSAME');await page.locator('.coop-library summary').click();await expect(page.locator('.coop-library-row')).toHaveCount(250);
  await page.getByLabel('Koop-Spiel suchen').fill('title 250');await expect(page.locator('.coop-library-row')).toHaveCount(1);
  await page.getByRole('button',{name:'Spiel auslosen',exact:true}).click();
@@ -128,7 +128,7 @@ test('large coop libraries keep every candidate accessible',async({page})=>{
 });
 
 test('dropdown arrows and field edges hit the native select',async({page})=>{
- await page.goto('http://localhost:4317');
+ await page.goto('http://localhost:4317/?preview=1');
  for(const selector of ['.select-wrap','.friend-select','.sort-select']){
    const field=page.locator(selector);await field.scrollIntoViewIfNeeded();
    expect(await field.evaluate(el=>{const r=el.getBoundingClientRect();return [8,r.width-12].every(x=>document.elementFromPoint(r.x+x,r.y+r.height/2)?.tagName==='SELECT');})).toBe(true);
@@ -137,7 +137,7 @@ test('dropdown arrows and field edges hit the native select',async({page})=>{
  await expect(page.getByLabel('Genre',{exact:true})).not.toHaveValue('Alle Genres');
 });
 test('shuffle final card matches the drawn game and honors reduced motion',async({page})=>{
- await page.emulateMedia({reducedMotion:'reduce'});await page.goto('http://localhost:4317');
+ await page.emulateMedia({reducedMotion:'reduce'});await page.goto('http://localhost:4317/?preview=1');
  await page.getByRole('button',{name:'Spiel auslosen',exact:true}).click();
  await expect(page.getByRole('button',{name:'Nochmal mischen'})).toBeVisible({timeout:2000});
  await expect(page.locator('.shuffle-card-copy strong')).toHaveText(await page.locator('.result-box h3').innerText());
@@ -146,7 +146,7 @@ test('shuffle final card matches the drawn game and honors reduced motion',async
 
 test('one remaining candidate is revealed immediately without fake suspense',async({page})=>{
  await page.addInitScript(()=>localStorage.setItem('rr_demo_preferences',JSON.stringify(Object.fromEntries([275850,1621690,548430,892970,632360].map(appid=>[`coop:${appid}`,{appid,scope:'coop',name:'Excluded',until:Date.now()+60000}])))));
- await page.goto('http://localhost:4317');await expect(page.locator('.draw-caption')).toContainText('1 GEMEINSAME');
+ await page.goto('http://localhost:4317/?preview=1');await expect(page.locator('.draw-caption')).toContainText('1 GEMEINSAME');
  await page.getByRole('button',{name:'Spiel auslosen',exact:true}).click();
  await expect(page.locator('.result-box h3')).toHaveText('Satisfactory',{timeout:1000});
 });
@@ -158,7 +158,7 @@ test('cached friend comparisons remain selectable and explain incomplete Steam c
  await page.route('**/api/friends',r=>r.fulfill({json:{friends:[{steamid:'A',name:'Freund A'},{steamid:'B',name:'Freund B'}]}}));
  const requests=[];
  await page.route('**/api/coop',r=>{const {friend}=r.request().postDataJSON();requests.push(friend);return r.fulfill({json:{status:'complete',cached:requests.length===3,failed:1,games:[{appid:1,name:`Spiel mit ${friend}`}],failures:[{appid:2,name:'Unbekannter Titel',reason:'Steam liefert für diesen Titel keine Store-Daten.'}]}});});
- await page.goto('http://localhost:4317');
+ await page.goto('http://localhost:4317/?preview=1');
  for(const friend of ['A','B','A']){await page.locator('#friend').selectOption(friend);await page.getByRole('button',{name:'Gemeinsame Spiele prüfen'}).click();await expect(page.getByRole('button',{name:'Spiel auslosen',exact:true})).toBeEnabled();}
  expect(requests).toEqual(['A','B','A']);
  await expect(page.getByText('Gespeicherter Vergleich · ohne erneuten Scan.')).toBeVisible();
@@ -171,7 +171,7 @@ test('old Finals snapshot no longer gives store rotations a full release badge o
  await page.route('**/api/preferences',r=>r.fulfill({json:{preferences:[]}}));
  await page.route('**/api/friends',r=>r.fulfill({json:{friends:[]}}));
  await page.route('**/api/scan',r=>r.fulfill({json:{status:'complete',games:[{appid:1,name:'THE FINALS',genres:['Action'],lastPlayed:1700000000,minutes:60,events:[{id:'store',title:'Store Update 11.1.0',kind:'release',date:1750000000},{id:'update',title:'Update 11.3.0',kind:'update',date:1750100000}]},{appid:2,name:'Shop only',genres:[],events:[{id:'store2',title:'Store Update 1.0',kind:'release',date:1750000000}]}]}}));
- await page.goto('http://localhost:4317');
+ await page.goto('http://localhost:4317/?preview=1');
  await expect(page.locator('.game-card')).toHaveCount(1);
  await expect(page.locator('.game-card .event-badge')).toHaveText('Content-Update');
  expect(Number(await page.locator('.score summary strong').innerText())).toBeLessThan(20);

@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 test('English is the default and language switching persists without changing filters',async({page})=>{
- await page.goto('http://localhost:4317');
+ await page.goto('http://localhost:4317/?preview=1');
  await expect(page.locator('html')).toHaveAttribute('lang','en');
  await expect(page.getByRole('dialog')).toContainText('Your library. Rediscovered.');
  await expect(page.getByRole('dialog')).toContainText('full release 100, DLC 70');
@@ -36,7 +36,7 @@ test('comparison overlay appears before HTTP response, shows progress, and clear
   if(r.request().method()==='POST'){posts++;if(failed)return r.fulfill({status:500,json:{error:'Der Scan konnte nicht gestartet werden.'}});await gate;return r.fulfill({json:{status:'running',total:135,done:35,games:[]}});}
   return r.fulfill({json:{status:'complete',total:135,done:135,games:[{appid:1,name:'Shared Game'}]}});
  });
- await page.goto('http://localhost:4317');
+ await page.goto('http://localhost:4317/?preview=1');
  await page.getByRole('button',{name:'Check shared games'}).click();
  await expect(page.locator('#coop-panel')).toHaveAttribute('aria-busy','true');
  await expect(page.locator('.coop-loading')).toContainText('Starting your comparison');

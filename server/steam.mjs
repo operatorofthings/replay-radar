@@ -43,11 +43,11 @@ export async function cachedMetadata(appid) {
   const db=await storage(),record=await db.get('public-cache',`store-v1-${appid}`);
   return record?.freshUntil>Date.now()?record.value:null;
 }
-export async function metadata(appid) {
-  return cached(`store-v1-${appid}`,7*DAY*1000,()=> {
+export async function metadata(appid,requireType=false) {
+  return cached(`${requireType?'store-v2':'store-v1'}-${appid}`,7*DAY*1000,()=> {
     const task=storeTail.then(async()=> {
       const started=Date.now();
-      try {const result=await requestJson(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=german`);const d=result[appid]?.data;if(!d)throw new Error('Store-Metadaten fehlen');return {image:d.header_image,genres:(d.genres||[]).map(g=>g.description),categories:(d.categories||[]).map(c=>c.id)};}
+      try {const result=await requestJson(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=german`);const d=result[appid]?.data;if(!d)throw new Error('Store-Metadaten fehlen');return {name:d.name,type:d.type,comingSoon:Boolean(d.release_date?.coming_soon),image:d.header_image,genres:(d.genres||[]).map(g=>g.description),categories:(d.categories||[]).map(c=>c.id)};}
       finally {await pause(Math.max(0,1600-(Date.now()-started)));}
     });storeTail=task.catch(()=>{});return task;
   });

@@ -1,48 +1,81 @@
 # Replay Radar
 
-Finde neue Gründe, deine Steam-Spiele wieder anzuspielen – und ein gemeinsames Koop-Spiel für den nächsten Abend.
+**Find your next reason to play.** Rediscover games you own, discover new ones that fit your taste, and pick a co-op game with a friend.
 
-**Live: [replay-radar.com](https://replay-radar.com)**
+**[Open Replay Radar](https://replay-radar.com)** · [Hosting & operations](docs/AWS.md)
 
-## Features
+![Replay Radar sign-in page](docs/preview.png)
 
-- Offizielle Entwickler-News seit deinem letzten Spielzeitpunkt, gewichtet nach Vollversion, DLC und Updates.
-- Genre-Filter und erklärbare Scores: wichtigstes Ereignis plus begrenzte Boni für weitere Inhalte, Aktualität und Abwechslung.
-- „Keine Lust“ (7 Tage), kompakte Wiedervorlage (1/3/7 Tage), Sofort-bis-morgen und Rückgängig.
-- Koop-Shuffle mit Spielkarten aus beiden Bibliotheken, optionale Score-Gewichtung, durchsuchbare Liste mit Gewinnchancen und getrennten Koop-Ausblendungen.
-- Einführung mit Quellcode, Architektur und Datenvorhaltung beim ersten Besuch; später unter „So funktioniert’s“.
-- Steam OpenID: Das Passwort bleibt bei Steam. Anmeldung ist für alle Steam-Konten offen.
+## Three ways to find your next game
 
-## Lokal starten
+| Area | What it does |
+| --- | --- |
+| **Replay Radar** | Ranks meaningful developer updates published since you last played. |
+| **Discover** | Suggests games you do not own using Steam tags and logarithmically weighted playtime. |
+| **Co-op Shuffle** | Compares two libraries and draws a shared co-op game. |
 
-Node.js 22 oder neuer:
+Sign in with Steam to start. Your password stays with Steam. English is the default; German is available from the language selector. Game details must be public. Co-op also requires an accessible friends list and your friend's game details.
+
+## How the recommendations work
+
+### Replay Radar
+
+The most significant event sets the base: **full release 100**, **DLC 70**, **major update 40**, **content update 15**. Additional content adds up to 6 points, recency up to 4, and genre variety up to 3. Tap a score for its breakdown, or adjust the weights.
+
+Classification uses official developer headlines. Identifiable announcements, shop rotations, surveys and minor fixes are excluded. Classification can be wrong; source posts are linked. At most 500 posts per game are checked. DLC ownership is not verified. Games without a last-played timestamp are not given invented return recommendations.
+
+### Discover
+
+Up to **16 played games** build a taste profile. Each contributes `log(1 + hours)` to a normalized tag vector; less common tags receive more weight. Candidate similarity is measured against that profile, with a small diversity adjustment to avoid near-identical results. Each suggestion names up to two related games you played.
+
+The shared catalogue contains **up to 200 games** from Steam top sellers and recent releases. Up to 30 matching candidates receive a full store check; the interface displays up to 12. Owned games, unavailable releases and non-game products are filtered out. This is a limited, popularity-biased catalogue, not a search of the entire Steam store. Matches indicate similar interests, not purchase guarantees.
+
+Steam search HTML supplies tag IDs and may change. Missing tag data is reported rather than invented. Public catalogue data is cached for one day, tag metadata for up to seven. You can exclude games from your profile or hide suggestions; both actions can be reversed and expire after seven days.
+
+### Co-op Shuffle
+
+Both users must own the game and Steam must identify the selected co-op mode. Every candidate has equal odds by default. Optional weighting uses `1 + Replay Score / 50`. The final draw uses browser cryptographic randomness; the card animation is decorative.
+
+## Refreshing and saved results
+
+**Refresh library** fetches current ownership, playtime and last-played timestamps. It invalidates dependent discovery and friend comparisons while retaining reusable public Steam metadata. A one-minute admission limit and one active task per user prevent overlapping scans. Existing results stay visible during an in-page refresh.
+
+Background tasks use bounded work packages, with only initializers publishing them. Lambda recursion protection stays enabled. The first scan can take several minutes; cached comparisons are faster. Partial failures are shown in the interface.
+
+## Run locally
+
+Requires **Node.js 22+** and a Steam Web API key.
 
 ```bash
 npm ci
 cp .env.example .env
-# STEAM_API_KEY in .env setzen; nicht veröffentlichen.
+# Set STEAM_API_KEY in .env. Never commit it.
 npm run dev
 ```
 
-Öffne http://localhost:4317. Ohne Anmeldung zeigt die App klar markierte Beispieldaten. Eigene Spieledetails, Freundesliste und Spieledetails des Freundes müssen über Steam abrufbar sein. OpenID hebt private Steam-Einstellungen nicht auf.
+Open **http://localhost:4317**. For a local production build:
 
-Für den Produktionsmodus: `npm run build && npm start`. Die lokale `.runtime` ist optional und wird nicht mitgeliefert.
+```bash
+npm run build
+npm start
+```
 
-## Wie der Score funktioniert
+An unlinked `?preview=1` route retains sample fixtures for UI regression testing. Ordinary visitors see the Steam sign-in page.
 
-Standard: Vollversion **100**, neuer DLC **70**, großes Update **40**, Content-Update **15**. Das wichtigste Ereignis zählt voll. Weitere Inhalte liefern einen allmählich sättigenden Bonus unter 6 Punkten; Aktualität bis 4; Abwechslung bis 3. Anzeige mit einer Nachkommastelle statt einer schnellen Sättigung auf demselben ganzzahligen Wert. Gleiche Werte bleiben möglich und werden stabil nach AppID sortiert.
+## Data and privacy
 
-Der Abwechslungsbonus verwendet verfügbare Spielminuten der letzten 14 Tage und deren Store-Genres. Häufig gespielte Genres bekommen weniger Bonus. Ohne Daten kein Bonus; während eines Scans kann er sich mit weiteren Metadaten verändern. In der Demo wird das ausdrücklich beispielhaft berechnet. Der Score ist eine Rückkehrhilfe, kein Qualitätsurteil. Hover, Tastatur oder Tippen auf den Score zeigt die Bestandteile.
+- Personal results, libraries and preferences expire within seven days of storage.
+- Friends lists last 24 hours; sessions last 12 hours.
+- Personal data is separated by a server-derived user alias. Sessions and friends lists also contain Steam IDs.
+- Expired records are ignored immediately; physical database deletion can follow later.
+- Public game metadata is shared between users to reduce Steam requests.
+- Language and interface preferences are saved locally in the browser.
 
-Überschriften werden heuristisch eingeordnet; Sales, Zukunftsankündigungen und Hotfixes werden soweit erkennbar ausgeschlossen. Pro Spiel maximal 500 Meldungen. Fehler und unvollständige Archive werden angezeigt. DLC-Besitz wird nicht überprüft. Ohne letzten Spielzeitpunkt wird kein Rückkehrvergleich erfunden.
+## Architecture and deployment
 
-Koop braucht gemeinsame AppIDs und Steam-Kategorie 38 (Online-Koop), optional 9/39. Standardmäßig gleiche Chancen. Optional: `Gewicht = 1 + Replay-Score / 50`. Unbewertete Spiele behalten Gewicht 1. Auswahl und Prozentanzeige verwenden dieselben Wahrscheinlichkeiten; die Zufallsquelle ist `crypto.getRandomValues`. Der Gewinner wird einmal aus sämtlichen Kandidaten gezogen. Die begrenzte Kartenanimation ist rein dekorativ und verändert die Chancen nicht. Die durchsuchbare Liste enthält weiterhin sämtliche Titel. Bei reduzierter Bewegung oder nur einem Kandidaten erscheint das Ergebnis unmittelbar. Koop-Scores übernehmen vorhandene Radar-Ergebnisse und lösen keinen zusätzlichen News-Scan aus.
+CloudFront/WAF serves a private S3 frontend. Lambda handles authentication and APIs. SQS FIFO and a bounded Lambda worker process scans. DynamoDB stores cached results with expiry times.
 
-## Daten und Hosting
-
-CloudFront/WAF → privates S3 für die Oberfläche, Lambda für API und Login, SQS/Lambda für Scans, DynamoDB mit Ablaufzeiten. Terraform verwaltet Infrastruktur einschließlich Route 53 und ACM. GitHub Actions veröffentlicht App-Versionen per kurzlebigem AWS-OIDC-Login.
-
-Details zu Kosten, Aufbewahrung, Deployment und Betrieb: **[docs/AWS.md](docs/AWS.md)**.
+Terraform owns infrastructure; the manually triggered **Deploy** GitHub Actions workflow tests and publishes app code using AWS OIDC. No long-lived AWS keys are stored in the repository. See [hosting documentation](docs/AWS.md) for configuration, retention and operational limits.
 
 ## Tests
 
@@ -54,14 +87,10 @@ npx playwright install --with-deps chromium
 npm run test:ui
 ```
 
-Playwright startet den lokalen Server bei Bedarf. Tests prüfen Ranking, gewichtete Auswahl, Ablaufzeiten, Isolation, Queue-Wiederaufnahme, Authentifizierung, Ausblendungen, Einführung und große Koop-Bibliotheken. Ein vollständiger persönlicher Steam-Login ist interaktiv.
+Tests cover ranking, cache refresh, finite queue fanout, ownership filtering, user isolation, login, languages, loading states and mobile layouts. A real Steam sign-in remains interactive.
 
-Optional registriert die Oberfläche einen Genre-Filter für Browser mit WebMCP-Unterstützung.
+## Sources and limitations
 
-Quellen: [Steam OpenID](https://steamcommunity.com/dev), [IPlayerService](https://partner.steamgames.com/doc/webapi/IPlayerService), [ISteamUser](https://partner.steamgames.com/doc/webapi/ISteamUser), [ISteamNews](https://partner.steamgames.com/doc/webapi/ISteamNews).
+[Steam OpenID](https://steamcommunity.com/dev) · [Player data](https://partner.steamgames.com/doc/webapi/IPlayerService) · [Developer news](https://partner.steamgames.com/doc/webapi/ISteamNews) · [Steam tags](https://partner.steamgames.com/doc/store/tags)
 
-### Interface languages
-
-The interface defaults to English. The EN/DE selector in the header and dialogs switches languages and stores the choice locally in the browser. Original developer news and game names remain unchanged. German source strings are translated through `src/i18n.js` and `src/locales/en.json`; genre identifiers remain stable across language changes.
-
-The co-op comparison displays a blurred loading overlay from the initial request through background processing. Progress updates appear inside the panel, and failed requests release the controls for retrying.
+Replay Radar is an independent project and is not affiliated with Valve. Steam availability, privacy settings and store-data changes can affect results.

@@ -115,3 +115,44 @@ test('existing scan snapshots get corrected on a cache hit without starting anot
  const result=await startJob(account,'scan',{}, {db,enqueue:async m=>messages.push(m)});
  assert.equal(result.cached,true);assert.equal(result.games.length,1);assert.equal(result.games[0].events.length,1);assert.equal(result.games[0].events[0].kind,'update');assert.equal(messages.length,0);
 });
+
+test('explicit refresh bypasses a fresh snapshot and library cache, invalidating dependent results',async t=>{
+ const db=await temporaryStore(t),messages=[],account={alias:'refresh',sessionId:'s'};let calls=0;
+ await db.put('sessions','s',{user:{steamid:'1'}});await db.put('user:refresh','library',{at:Date.now(),games:[{appid:1}]});
+ await db.put('user:refresh','job:scan',{status:'complete',startedAt:Date.now(),games:[]});
+ await db.put('user:refresh','job:discover',{status:'complete',games:[]});await db.put('user:refresh','coop-result:f:online',{friendKey:'f',mode:'online'});
+ const dependencies={db,config:{key:'test'},enqueue:async m=>messages.push(m),steam:{owned:async()=>{calls++;return [];}}};
+ await startJob(account,'scan',{},dependencies);assert.equal(messages.length,0);
+ await startJob(account,'scan',{force:true},dependencies);assert.equal(messages.length,1);
+ await step(messages.shift(),dependencies);assert.equal(calls,1);assert.deepEqual((await db.get('user:refresh','library')).games,[]);
+ assert.equal(await db.get('user:refresh','job:discover'),null);assert.equal(await db.get('user:refresh','coop-result:f:online'),null);
+ await assert.rejects(startJob(account,'scan',{force:true},dependencies),/gerade gestartet/);
+});
+
+test('Discover uses finite chunks and never enqueues from candidate workers',async t=>{
+ const db=await temporaryStore(t),messages=[],account={alias:'discover',sessionId:'s'};
+ await db.put('sessions','s',{user:{steamid:'1'}});
+ const dependencies={db,config:{key:'test'},enqueue:async m=>messages.push(m),steam:{owned:async()=>[{appid:1}]},prepareDiscovery:async()=>({profile:[{appid:1,name:'Owned'}],catalogueSize:200,todo:Array.from({length:7},(_,i)=>({appid:i+2}))}),discoveryGame:async game=>({...game,name:'Candidate'})};
+ await startJob(account,'discover',{},dependencies);await step(messages.shift(),dependencies);
+ assert.deepEqual(messages.map(m=>m.cursor),[0,3,6]);
+ const chunks=messages.splice(0);for(const chunk of chunks)await step(chunk,dependencies);
+ const result=await db.get('user:discover','job:discover');assert.equal(result.status,'complete');assert.equal(result.done,7);assert.equal(result.games.length,7);assert.equal(messages.length,0);assert.equal(await db.get('user:discover','admission:work'),null);
+ assert.equal((await startJob(account,'discover',{},dependencies)).cached,true);
+});
+test('discovery exclusions and hidden games are authenticated and isolated',async t=>{
+ const db=await temporaryStore(t),token='c'.repeat(64),other='d'.repeat(64);
+ for(const [value,alias]of [[token,'first'],[other,'second']])await db.put('sessions',createHash('sha256').update(value).digest('hex'),{user:{name:alias},alias},3600);
+ await db.put('user:first','library',{games:[{appid:1,name:'My game'}]});
+ await db.put('user:first','job:discover',{status:'complete',games:[{appid:2,name:'Suggestion'}]});
+ const server=createServer();server.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
+ const origin=`http://127.0.0.1:${server.address().port}`;server.on('request',await createApp({db,config:{origin,key:'key',salt:'salt',allowlist:[]}}));
+ const request=(route,body,cookie=token)=>fetch(origin+route,{method:body?'POST':'GET',headers:{Origin:origin,'Content-Type':'application/json',Cookie:`rr_session=${cookie}`},body:body?JSON.stringify(body):undefined});
+ assert.equal((await request('/api/discover',undefined,'')).status,401);
+ assert.equal((await request('/api/discover/hidden',{appid:2})).status,200);
+ assert.equal((await(await request('/api/discover/hidden',undefined,other)).json()).games.length,0);
+ assert.equal((await request('/api/discover/exclusions',{appid:1})).status,200);
+ assert.equal((await(await request('/api/discover/exclusions')).json()).games.length,1);
+ assert.equal((await(await request('/api/discover/exclusions',undefined,other)).json()).games.length,0);
+ assert.equal((await request('/api/discover/exclusions',{appid:1},other)).status,400);
+ assert.equal(await db.get('user:first','job:discover'),null);
+});
