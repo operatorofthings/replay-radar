@@ -65,3 +65,7 @@
 .discover-comparison details{margin-top:15px;border-top:1px solid #493954;padding-top:12px}
 .discover-comparison summary{cursor:pointer;font-size:12px;color:#c7b5dc;line-height:1.5}
 .discover-comparison details p{color:#c7bdcf;margin-bottom:0}
+
+.discover-filters{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:22px;font-size:14px}
+.discover-filters label{color:#d8c6ed}.discover-filters select{max-width:100%;background:#241f2b;color:#eee7f5;border:1px solid #695184;border-radius:8px;padding:11px 14px;min-height:44px}
+.discover-filters>span{font-size:12px;color:#b8a5cb}

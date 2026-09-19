@@ -37,3 +37,38 @@ test('initial radar scan has its own loading overlay',async({page})=>{
  await page.goto('http://localhost:4317');await expect(page.locator('.radar-first-loading')).toBeVisible();await expect(page.locator('.radar-first-loading')).toContainText('Updating your radar');
  await page.getByRole('button',{name:/Co-op Shuffle Pick/}).click();await expect(page.locator('#coop')).toBeVisible();await expect(page.locator('#radar')).toBeHidden();
 });
+
+test('Discover co-op filter uses verified categories before the display limit, keeps comparisons and needs no scan',async({page})=>{
+ let scans=0;
+ const games=Array.from({length:12},(_,i)=>({appid:i+10,name:`Solo ${i}`,match:90,categories:[1],reasons:[]}));
+ games.push({appid:50,name:'Online adventure',match:75,categories:[38],reasons:[{appid:1,name:'My favourite',affinity:.7}]},{appid:51,name:'Couch adventure',match:70,categories:[39],reasons:[]},{appid:52,name:'Co-op adventure',match:65,categories:[9],reasons:[]},{appid:53,name:'Unknown features',match:60,reasons:[]});
+ await page.route('**/api/session',r=>r.fulfill({json:{user:{name:'Test'},hasKey:true,keyConfigured:true}}));
+ await page.route('**/api/preferences',r=>r.fulfill({json:{preferences:[]}}));
+ await page.route('**/api/friends',r=>r.fulfill({json:{friends:[]}}));
+ await page.route('**/api/scan',r=>r.fulfill({json:{status:'complete',games:[]}}));
+ await page.route('**/api/discover',r=>{if(r.request().method()==='POST')scans++;return r.fulfill({json:{status:'complete',games}});});
+ for(const path of ['exclusions','hidden'])await page.route('**/api/discover/'+path,r=>r.fulfill({json:{games:[]}}));
+ await page.goto('http://localhost:4317/#discover');
+ await expect(page.locator('#discover .game-card')).toHaveCount(12);
+ await page.getByLabel('Play together',{exact:true}).selectOption('coop');
+ await expect(page.locator('#discover .game-card')).toHaveCount(3);
+ await expect(page.locator('#discover')).toContainText('My favourite');
+ await expect(page.locator('.discover-similarity')).toHaveText('70% tag similarity');
+ await page.getByLabel('Play together',{exact:true}).selectOption('online');
+ await expect(page.locator('#discover .game-card')).toHaveCount(1);
+ await expect(page.locator('#discover .game-card h3')).toHaveText('Online adventure');
+ await page.getByLabel('Language / Sprache').selectOption('de');
+ await expect(page.getByLabel('Zusammen spielen',{exact:true})).toHaveValue('online');
+ await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:'test-results/discover-coop-mobile.png',fullPage:true});
+ await page.getByRole('button',{name:'Kein Interesse',exact:true}).click();
+ // An empty refreshed response is represented without claiming Steam has no co-op games.
+ games.splice(12);
+ await page.reload();
+ await page.getByLabel('Zusammen spielen',{exact:true}).selectOption('coop');
+ await expect(page.locator('#discover')).toContainText('Keine Koop-Treffer in diesen Empfehlungen');
+ await page.getByRole('button',{name:'Alle Spiele anzeigen',exact:true}).click();
+ await expect(page.locator('#discover .game-card')).toHaveCount(12);
+ expect(scans).toBe(0);
+});
